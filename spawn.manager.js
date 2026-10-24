@@ -5,7 +5,7 @@ const utils = require('utils');
  * Determine the optimal source ID to assign to a newly spawned harvester.
  */
 function assignHarvesterSource(room, harvesters) {
-    const sources = utils.getCachedSources(room);
+    const sources = room.ctx.sources; // Use Context!
     let bestSourceId = null;
     let leastAssigned = Infinity;
 
@@ -37,53 +37,52 @@ module.exports = {
             return;
         }
 
-        const roomCreeps = spawn.room.find(FIND_MY_CREEPS);
-        const creepsByRole = _.groupBy(roomCreeps, c => c.memory.role);
+        const room = spawn.room;
+        if (!room.ctx) return; // Wait for context init
 
+        // 1. Census (Optimization: scan from Context, not find())
+        const creeps = room.ctx.creeps;
+        const creepsByRole = _.groupBy(creeps, c => c.memory.role);
         const count = role => (creepsByRole[role] || []).length;
 
-        // Threat Check
-        const stats = (spawn.room.memory.stats && spawn.room.memory.stats.current) ? spawn.room.memory.stats.current.threats : null;
-        const inDanger = stats && (stats.threatLevel === 'danger' || stats.threatLevel === 'warning');
+        // 2. Determine Needs (Priority Queue)
+        const queue = [];
 
-        // 1. Emergency Defense
-        if (inDanger && count(constants.ROLE_WARRIOR) < 2) {
-            this.spawnCreep(spawn, constants.ROLE_WARRIOR, spawn.room.energyAvailable);
-            return;
+        // Emergency / Military
+        const threatLevel = room.ctx.threat.level;
+        if (threatLevel > 0) {
+            if (count(constants.ROLE_WARRIOR) < 2) queue.push(constants.ROLE_WARRIOR);
+            // More logic for defenders could go here
         }
 
-        // 2. Critical Recovery: Harvesters and Haulers must exist
-        if (count(constants.ROLE_HARVESTER) === 0 && spawn.room.energyAvailable >= 200) {
-            const sourceId = assignHarvesterSource(spawn.room, creepsByRole[constants.ROLE_HARVESTER] || []);
-            this.spawnCreep(spawn, constants.ROLE_HARVESTER, spawn.room.energyAvailable, { assignedSource: sourceId });
-            return;
+        // Economy - Critical
+        if (count(constants.ROLE_HARVESTER) < 1) queue.push(constants.ROLE_HARVESTER);
+        else if (count(constants.ROLE_HAULER) < 1) queue.push(constants.ROLE_HAULER);
+
+        // Economy - Normal
+        else {
+            if (count(constants.ROLE_HARVESTER) < constants.MAX_HARVESTERS) queue.push(constants.ROLE_HARVESTER);
+            else if (count(constants.ROLE_HAULER) < constants.MAX_HAULERS) queue.push(constants.ROLE_HAULER);
+            else if (count(constants.ROLE_UPGRADER) < constants.MAX_UPGRADERS) queue.push(constants.ROLE_UPGRADER);
+            else if (count(constants.ROLE_BUILDER) < constants.MAX_BUILDERS) queue.push(constants.ROLE_BUILDER);
         }
 
-        if (count(constants.ROLE_HAULER) === 0 && spawn.room.energyAvailable >= 200) {
-            this.spawnCreep(spawn, constants.ROLE_HAULER, spawn.room.energyAvailable);
-            return;
-        }
+        // 3. Spawning
+        if (queue.length > 0) {
+            const roleToSpawn = queue[0];
+            const energy = room.energyAvailable;
 
-        // 3. Normal specialized spawning
-        const roles = [
-            { name: constants.ROLE_HARVESTER, limit: constants.MAX_HARVESTERS },
-            { name: constants.ROLE_HAULER, limit: constants.MAX_HAULERS },
-            { name: constants.ROLE_UPGRADER, limit: constants.MAX_UPGRADERS },
-            { name: constants.ROLE_BUILDER, limit: constants.MAX_BUILDERS }
-        ];
+            // Wait for full energy?
+            // If critical (0 harvesters), spawn immediately with what we have.
+            const isCritical = (roleToSpawn === constants.ROLE_HARVESTER && count(constants.ROLE_HARVESTER) === 0) ||
+                (roleToSpawn === constants.ROLE_HAULER && count(constants.ROLE_HAULER) === 0);
 
-        for (const roleDef of roles) {
-            if (count(roleDef.name) < roleDef.limit) {
-                const energy = spawn.room.energyAvailable;
-                if (energy >= spawn.room.energyCapacityAvailable || energy >= constants.SPAWN_ENERGY_WAIT_THRESHOLD) {
-                    let extraMem = {};
-                    if (roleDef.name === constants.ROLE_HARVESTER) {
-                        extraMem.assignedSource = assignHarvesterSource(spawn.room, creepsByRole[constants.ROLE_HARVESTER] || []);
-                    }
-                    this.spawnCreep(spawn, roleDef.name, energy, extraMem);
-                    return;
+            if (isCritical || energy >= constants.SPAWN_ENERGY_WAIT_THRESHOLD || energy >= room.energyCapacityAvailable) {
+                let extraMem = {};
+                if (roleToSpawn === constants.ROLE_HARVESTER) {
+                    extraMem.assignedSource = assignHarvesterSource(room, creepsByRole[constants.ROLE_HARVESTER] || []);
                 }
-                break; // Wait for energy for this specific role before checking next
+                this.spawnCreep(spawn, roleToSpawn, energy, extraMem);
             }
         }
     },
@@ -93,11 +92,14 @@ module.exports = {
         if (role === constants.ROLE_HARVESTER) body = utils.makeHarvesterBody(energy);
         else if (role === constants.ROLE_HAULER) body = utils.makeHaulerBody(energy);
         else if (role === constants.ROLE_WARRIOR) body = utils.makeWarriorBody(energy);
-        else body = utils.makeWorkerBody(energy);
+        else body = utils.makeWorkerBody(energy); // Builder/Upgrader
 
-        const name = role + Game.time;
+        const name = role + Game.time + '_' + Math.floor(Math.random() * 100);
         const result = spawn.spawnCreep(body, name, { memory: { role, ...extraMemory } });
-        if (result === OK) console.log(`✅ [Spawn] ${role} spawned in ${spawn.room.name}`);
+
+        if (result === OK) {
+            console.log(`✅ [Spawn] ${role} spawned in ${spawn.room.name} with ${body.length} parts`);
+        }
         return result;
     }
 };

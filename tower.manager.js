@@ -1,82 +1,75 @@
+const constants = require('constants');
+
 module.exports = {
     run() {
         for (const room of Object.values(Game.rooms)) {
-            this.runRoom(room);
+            // Context must have been initialized in main.js
+            if (room.ctx) this.runRoom(room);
         }
     },
 
     runRoom(room) {
-        const towers = require('utils')
-            .getCachedStructures(room, STRUCTURE_TOWER, 'towers', 10)
-            .filter(t => t.store.energy > 0);
+        const towers = room.ctx.towers.filter(t => t.store[RESOURCE_ENERGY] > 0);
+        if (towers.length === 0) return;
 
-        if (!towers.length) return;
-
-        const hostiles = room.find(FIND_HOSTILE_CREEPS);
-        const hasHostiles = hostiles.length > 0;
-
-        for (const tower of towers) {
-            if (this.tryAttack(tower)) continue;
-            if (this.tryHealCritical(tower)) continue;
-
-            // Save CPU unless combat
-            if (!hasHostiles && Game.time % 5 !== 0) continue;
-
-            if (this.tryRepairStructures(tower)) continue;
-            if (this.tryRepairWalls(tower)) continue;
-            this.tryHealMinor(tower);
+        // 1. Attack Hostiles (High Priority)
+        // room.ctx.hostiles is already cached.
+        const hostiles = room.ctx.hostiles;
+        if (hostiles.length > 0) {
+            // Simple logic: closest hostile to each tower, or focus fire?
+            // Focus fire is better, but simple closest is fine for now.
+            for (const tower of towers) {
+                const target = tower.pos.findClosestByRange(hostiles);
+                if (target) tower.attack(target);
+            }
+            return; // If attacking, don't do anything else
         }
-    },
 
-    tryAttack(tower) {
-        const hostile = tower.pos.findClosestByRange(FIND_HOSTILE_CREEPS);
-        if (!hostile) return false;
-        tower.attack(hostile);
-        return true;
-    },
+        // 2. Heal Friendly Creeps
+        // check for damaged creeps
+        // We can optimize this by caching damaged creeps in ctx if needed, but filtering ctx.creeps is fast enough usually.
+        const damagedCreeps = room.ctx.creeps.filter(c => c.hits < c.hitsMax);
+        if (damagedCreeps.length > 0) {
+            for (const tower of towers) {
+                const target = tower.pos.findClosestByRange(damagedCreeps);
+                if (target) tower.heal(target);
+            }
+            return;
+        }
 
-    tryHealCritical(tower) {
-        const creep = tower.pos.findClosestByRange(FIND_MY_CREEPS, {
-            filter: c => c.hits < c.hitsMax * 0.5
-        });
-        if (!creep) return false;
-        tower.heal(creep);
-        return true;
-    },
+        // 3. Repair (Urgent only) - Ramparts/Walls
+        // Use the Context's urgent list (computed once per room)
+        const urgentRepairs = room.ctx.repair.urgent;
+        if (urgentRepairs.length > 0) {
+            for (const tower of towers) {
+                // Sort by lowest hits to maintain walls evenly
+                // Optimization: sort once outside the loop?
+                // urgentRepairs is shared, so let's just pick one.
+                // To avoid all towers hitting the same wall (overkill), maybe random or spread?
+                // Simple closest is usually fine.
 
-    tryRepairStructures(tower) {
-        const target = tower.pos.findClosestByRange(FIND_STRUCTURES, {
-            filter: s =>
-                s.structureType === STRUCTURE_ROAD
-                    ? s.hits < s.hitsMax * 0.8
-                    : s.hits < s.hitsMax * 0.8 &&
-                    ![STRUCTURE_WALL, STRUCTURE_RAMPART].includes(s.structureType)
-        });
-        if (!target) return false;
-        tower.repair(target);
-        return true;
-    },
+                // If tower has good energy, repair.
+                if (tower.store[RESOURCE_ENERGY] > 400) {
+                    // Find closest urgent repair - doing a sort or findClosest is okay here as list should be small
+                    const target = tower.pos.findClosestByRange(urgentRepairs);
+                    if (target) tower.repair(target);
+                }
+            }
+            // We don't return here, we might want to do other repairs if we have spare towers? 
+            // Usually repairs consume all action.
+            return;
+        }
 
-    tryRepairWalls(tower) {
-        if (tower.store.energy < 500) return false;
-
-        const walls = tower.room.find(FIND_STRUCTURES, {
-            filter: s =>
-                [STRUCTURE_WALL, STRUCTURE_RAMPART].includes(s.structureType) &&
-                s.hits < require('constants').TOWER_REPAIR_THRESHOLD
-        });
-
-        if (!walls.length) return false;
-
-        walls.sort((a, b) => a.hits - b.hits);
-        tower.repair(walls[0]);
-        return true;
-    },
-
-    tryHealMinor(tower) {
-        const creep = tower.pos.findClosestByRange(FIND_MY_CREEPS, {
-            filter: c => c.hits < c.hitsMax
-        });
-        if (creep) tower.heal(creep);
+        // 4. Maintenance (Roads/Containers) - Low Priority
+        // Only if tower is full
+        const maintenance = room.ctx.repair.maintenance;
+        if (maintenance.length > 0) {
+            for (const tower of towers) {
+                if (tower.store[RESOURCE_ENERGY] > 600) {
+                    const target = tower.pos.findClosestByRange(maintenance);
+                    if (target) tower.repair(target);
+                }
+            }
+        }
     }
 };

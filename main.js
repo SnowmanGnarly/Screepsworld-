@@ -13,6 +13,13 @@ const roles = {
 module.exports.loop = function () {
     cleanupMemory();
 
+    // Init Room Context (Brain)
+    const RoomContext = require('room.context');
+    for (const room of Object.values(Game.rooms)) {
+        RoomContext.init(room);
+        require('task.manager').run(room);
+    }
+
     require('tower.manager').run();
     require('spawn.manager').run();
 
