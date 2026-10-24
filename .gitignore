@@ -1,0 +1,13 @@
+# Node / dependencies
+node_modules/
+package-lock.json
+
+# IDE and Editor files
+.vscode/
+*.code-workspace
+
+# Screeps temporary files
+.screeps/
+*.tmp
+*.log
+d
