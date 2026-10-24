@@ -310,3 +310,4 @@ class LogisticsManager {
 }
 
 module.exports = LogisticsManager;
+

@@ -184,3 +184,4 @@ class DefenseManager {
 }
 
 module.exports = DefenseManager;
+

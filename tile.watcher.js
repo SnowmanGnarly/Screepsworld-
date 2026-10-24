@@ -68,3 +68,5 @@ class TileWatcher {
 }
 
 module.exports = TileWatcher;
+
+module.exports = TileWatcher;

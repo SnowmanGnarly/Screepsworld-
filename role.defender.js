@@ -50,3 +50,4 @@ class Defender extends RolePrototype {
 }
 
 module.exports = Defender;
+

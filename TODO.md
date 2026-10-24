@@ -162,3 +162,4 @@
 4. **Defensive Programming**:
    - All room and structure lookups guarded against visionless rooms (`Game.getObjectById` null checks).
    - Safe role iteration preventing uncaught `TypeError` propagation.
+
