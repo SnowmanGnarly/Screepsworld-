@@ -1,53 +1,70 @@
 /*
- * Defenders protect the base on-demand when invasions or hostile creeps are detected.
- * They attack the prioritized target determined by DefenseManager.
+ * Defenders spawn on demand with melee, ranged, or healing support bodies.
  */
 
 var MainCache = require('./main.cache');
-var MainUtil = require('./main.util');
-var info = require('./main.info');
 var RolePrototype = require('./role.prototype');
 var DefenseManager = require('./manager.defense');
 
 class Defender extends RolePrototype {
 
-	constructor() {
-		super('Defender', '#ff0000', '🛡️');
-		this.priority = 90;
-	}
+    constructor() {
+        super('Defender', '#ff0000', '🛡️');
+        this.priority = 90;
+    }
 
-	isNecessary(room) {
-		return room.memory.defense && room.memory.defense.threatLevel > 0;
-	}
+    isNecessary(room) {
+        return room.memory.defense && room.memory.defense.threatLevel >= 2;
+    }
 
-	spawnCreep(spawn) {
-		return this._spawnCreepWithParts(spawn, [TOUGH, ATTACK, MOVE, MOVE], [ATTACK, MOVE]);
-	}
+    spawnCreep(spawn) {
+        var style = spawn.room.memory.defense && spawn.room.memory.defense.preferredStyle;
+        if (style === 'ranged') {
+            return this._spawnCreepWithParts(spawn, [RANGED_ATTACK, MOVE]);
+        }
+        if (style === 'support') {
+            return this._spawnCreepWithParts(spawn, [HEAL, MOVE]);
+        }
+        return this._spawnCreepWithParts(spawn, [TOUGH, ATTACK, MOVE, MOVE], [ATTACK, MOVE]);
+    }
 
-	_work(creep) {
-		var target = DefenseManager.getPriorityTarget(creep.room);
-		if (!target) {
-			var hostiles = MainCache.find(creep.room, FIND_HOSTILE_CREEPS);
-			if (hostiles.length > 0) {
-				target = creep.pos.findClosestByRange(hostiles);
-			}
-		}
+    _work(creep) {
+        var threatLevel = creep.room.memory.defense && creep.room.memory.defense.threatLevel;
+        if (!threatLevel) {
+            creep.memory.selfdestruct = true;
+            return;
+        }
 
-		if (target) {
-			var attackResult = creep.attack(target);
-			if (attackResult === ERR_NOT_IN_RANGE) {
-				this._moveToLocation(creep, target);
-			}
-			return;
-		}
+        if (creep.getActiveBodyparts(HEAL) > 0) {
+            this._support(creep);
+            return;
+        }
 
-		// If no hostiles, patrol near main spawn or ramparts
-		var spawns = MainCache.find(creep.room, FIND_MY_SPAWNS);
-		if (spawns.length > 0 && !creep.pos.inRangeTo(spawns[0], 3)) {
-			this._moveToLocation(creep, spawns[0]);
-		}
-	}
+        var target = DefenseManager.getPriorityTarget(creep.room);
+        if (!target) return;
+        var result = creep.getActiveBodyparts(RANGED_ATTACK) > 0 ? creep.rangedAttack(target) : creep.attack(target);
+        if (result === ERR_NOT_IN_RANGE) {
+            this._moveToLocation(creep, target);
+        }
+    }
+
+    _support(creep) {
+        var damagedCreeps = MainCache.find(creep.room, FIND_MY_CREEPS, {
+            filter: creep => creep.hits < creep.hitsMax
+        });
+        if (damagedCreeps.length > 0) {
+            var target = damagedCreeps.sort((a, b) => creep.pos.getRangeTo(a) - creep.pos.getRangeTo(b))[0];
+            if (creep.heal(target) === ERR_NOT_IN_RANGE) {
+                this._moveToLocation(creep, target);
+            }
+            return;
+        }
+
+        var target = DefenseManager.getPriorityTarget(creep.room);
+        if (target && !creep.pos.inRangeTo(target, 3)) {
+            this._moveToLocation(creep, target);
+        }
+    }
 }
 
 module.exports = Defender;
-

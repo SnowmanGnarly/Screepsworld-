@@ -41,13 +41,13 @@ module.exports.loop = function () {
     CpuManager.measure('BaseManager', () => BaseManager.runAll(allRoles));
     CpuManager.measure('TowerManager', TowerManager.runAll);
     CpuManager.measure('LinkManager', LinkManager.runAll);
-    CpuManager.measure('RoadManager', RoadManager.watchAllRooms);
-    CpuManager.measure('MayorManager', MayorManager.runAll);
 
-    // print GUI on top
-
-    MainInfo.visualize();
-    CpuManager.visualize();
+    if (CpuManager.shouldRunDeferred()) {
+        CpuManager.measure('RoadManager', RoadManager.watchAllRooms);
+        CpuManager.measure('MayorManager', MayorManager.runAll);
+        MainInfo.visualize();
+        CpuManager.visualize();
+    }
 }
 
 // some helper methods to make managing this thing more easily

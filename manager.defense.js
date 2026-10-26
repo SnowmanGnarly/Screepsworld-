@@ -1,8 +1,3 @@
-/*
- * Defense Manager coordinates room-wide threat assessment,
- * on-demand defender dispatching, rate-limited notifications, and safe mode safeguards.
- */
-
 var constants = require('./main.constants');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
@@ -10,178 +5,234 @@ var info = require('./main.info');
 
 class DefenseManager {
 
-	static runAll() {
-		MainUtil.findAllRooms().forEach(room => {
-			if (room.memory.base) {
-				new DefenseManager(room).run();
-			}
-		});
-	}
+    static runAll() {
+        MainUtil.findAllRooms().forEach(room => {
+            if (!room.memory.base) return;
+            try {
+                new DefenseManager(room).run();
+            } catch (error) {
+                info.error('Could not run defense for ' + room.name + ': ' + error, room);
+                console.log(error.stack);
+            }
+        });
+    }
 
-	constructor(room) {
-		this._room = room;
-		this._memory = this._fetchMemory();
-	}
+    constructor(room) {
+        this._room = room;
+        this._memory = this._fetchMemory();
+    }
 
-	_fetchMemory() {
-		var defaultData = {
-			threatLevel: 0,
-			lastNotification: 0,
-			alarmTicks: 0,
-		};
-		if (!this._room.memory.defense) {
-			this._room.memory.defense = defaultData;
-		}
-		return this._room.memory.defense;
-	}
+    _fetchMemory() {
+        var defaultData = {
+            threatLevel: 0,
+            lastNotification: null,
+            alarmTicks: 0,
+            desiredDefenders: 0,
+        };
+        if (this._room.memory.defense) {
+            this._room.memory.defense = Object.assign(defaultData, this._room.memory.defense);
+        } else {
+            this._room.memory.defense = defaultData;
+        }
+        return this._room.memory.defense;
+    }
 
-	run() {
-		var hostiles = MainCache.find(this._room, FIND_HOSTILE_CREEPS);
-		var threatReport = this._assessThreat(hostiles);
+    run() {
+        var hostiles = MainCache.find(this._room, FIND_HOSTILE_CREEPS);
+        var report = this._assessThreat(hostiles);
+        this._memory.threatLevel = report.level;
+        this._memory.threatScore = report.score;
+        this._memory.primaryTargetId = report.primaryTarget ? report.primaryTarget.id : null;
 
-		this._memory.threatLevel = threatReport.level;
-		this._memory.primaryTargetId = threatReport.primaryTarget ? threatReport.primaryTarget.id : null;
+        if (report.level > 0) {
+            this._memory.alarmTicks++;
+            this._handleAlerts(report);
+            this._coordinateDefenders(report);
+            this._evaluateSafeMode(report, hostiles);
+        } else {
+            this._memory.alarmTicks = 0;
+            this._standDownDefenders();
+        }
+    }
 
-		if (threatReport.level > 0) {
-			this._memory.alarmTicks++;
-			this._handleAlerts(threatReport);
-			this._coordinateDefenders(threatReport);
-			this._evaluateSafeMode(threatReport, hostiles);
-		} else {
-			this._memory.alarmTicks = 0;
-			this._standDownDefenders();
-		}
-	}
+    _assessThreat(hostiles) {
+        if (hostiles.length === 0) {
+            return { level: 0, score: 0, primaryTarget: null, healerCount: 0, preferredStyle: 'melee' };
+        }
 
-	_assessThreat(hostiles) {
-		if (hostiles.length === 0) {
-			return { level: 0, score: 0, primaryTarget: null, healerCount: 0 };
-		}
+        var totalScore = 0;
+        var healerCount = 0;
+        var corePositions = MainCache.find(this._room, FIND_MY_SPAWNS).map(spawn => spawn.pos);
+        if (this._room.storage) corePositions.push(this._room.storage.pos);
 
-		var totalScore = 0;
-		var scoredHostiles = [];
-		var healerCount = 0;
+        var scoredHostiles = hostiles.map(hostile => {
+            var healParts = hostile.getActiveBodyparts(HEAL);
+            var attackParts = hostile.getActiveBodyparts(ATTACK);
+            var rangedParts = hostile.getActiveBodyparts(RANGED_ATTACK);
+            var workParts = hostile.getActiveBodyparts(WORK);
+            var boostedParts = hostile.body.filter(part => !!part.boost).length;
+            if (healParts > 0) healerCount++;
 
-		var corePositions = MainCache.find(this._room, FIND_MY_SPAWNS).map(s => s.pos);
-		if (this._room.storage) corePositions.push(this._room.storage.pos);
+            var score = healParts * 150 + rangedParts * 120 + attackParts * 100 + workParts * 80;
+            if (boostedParts > 0) score *= 2;
+            if (corePositions.length > 0) {
+                var minRange = Math.min(...corePositions.map(position => hostile.pos.getRangeTo(position)));
+                score += Math.max(0, (20 - minRange) * 10);
+            }
+            totalScore += score;
+            return { creep: hostile, score, healParts, attackParts, rangedParts, workParts };
+        });
+        scoredHostiles.sort((a, b) => b.score - a.score);
 
-		hostiles.forEach(hostile => {
-			var healParts = hostile.getActiveBodyparts(HEAL);
-			var attackParts = hostile.getActiveBodyparts(ATTACK);
-			var rangedParts = hostile.getActiveBodyparts(RANGED_ATTACK);
-			var workParts = hostile.getActiveBodyparts(WORK);
-			var isBoosted = hostile.body.some(part => !!part.boost);
+        var primary = scoredHostiles[0];
+        var level = 1;
+        if (totalScore >= 200 || scoredHostiles.some(hostile => hostile.attackParts > 0 || hostile.rangedParts > 0 || hostile.healParts > 0)) {
+            level = 2;
+        }
+        if (corePositions.length > 0 && primary.workParts + primary.attackParts + primary.rangedParts + primary.healParts > 0) {
+            var closestCore = Math.min(...corePositions.map(position => primary.creep.pos.getRangeTo(position)));
+            if (closestCore <= 4) level = 3;
+        }
 
-			if (healParts > 0) healerCount++;
+        return {
+            level,
+            score: totalScore,
+            primaryTarget: primary.creep,
+            healerCount,
+            preferredStyle: primary.rangedParts > 0 ? 'ranged' : 'melee',
+        };
+    }
 
-			var score = (healParts * 150) + (rangedParts * 120) + (attackParts * 100) + (workParts * 80);
-			if (isBoosted) score *= 2;
+    _handleAlerts(report) {
+        if (report.level < 2) return;
+        var now = Game.time;
+        var last = this._memory.lastNotification;
+        if (last && now - last < 100) return;
+        this._memory.lastNotification = now;
+        var message = '🛡️ [DEFENSE ALERT] Invasion in ' + this._room.name + ' at tick ' + now +
+            '! Threat Level: ' + report.level + ', Threat Score: ' + report.score;
+        Game.notify(message);
+        info.error(message, this._room);
+    }
 
-			// Proximity weight to core structures
-			if (corePositions.length > 0) {
-				var minRange = Math.min(...corePositions.map(pos => hostile.pos.getRangeTo(pos)));
-				score += Math.max(0, (20 - minRange) * 10);
-			}
+    _coordinateDefenders(report) {
+        var desired = report.level >= 2 ? (report.score > 600 ? 2 : 1) : 0;
+        this._memory.desiredDefenders = desired;
+        var baseName = this._room.memory.base.name;
+        var defenders = MainCache.getCreepsByHome(baseName).filter(creep => creep.memory.role === 'Defender');
+        this._memory.preferredStyle = report.healerCount > 0 && defenders.length > 0 ? 'support' : report.preferredStyle;
+    }
 
-			totalScore += score;
-			scoredHostiles.push({ creep: hostile, score: score, healParts: healParts, attackParts: attackParts + rangedParts });
-		});
+    _standDownDefenders() {
+        this._memory.desiredDefenders = 0;
+    }
 
-		// Sort: healers first, then highest combat threat
-		scoredHostiles.sort((a, b) => b.score - a.score);
-		var primaryTarget = scoredHostiles.length > 0 ? scoredHostiles[0].creep : null;
+    _evaluateSafeMode(report, hostiles) {
+        var controller = this._room.controller;
+        if (!controller || !controller.my || controller.safeMode || controller.safeModeCooldown || !controller.safeModeAvailable) return;
+        if (report.level !== 3) return;
 
-		var level = 1; // Probing
-		if (totalScore >= 200 || scoredHostiles.some(h => h.attackParts > 0 || h.healParts > 0)) {
-			level = 2; // Invasion
-		}
+        var criticalStructures = MainCache.find(this._room, FIND_MY_SPAWNS);
+        if (this._room.storage) criticalStructures.push(this._room.storage);
+        var breachedStructure = criticalStructures.find(structure => {
+            return hostiles.some(hostile => this._isDangerous(hostile) && hostile.pos.inRangeTo(structure, 3));
+        });
+        if (!breachedStructure || !this._isVulnerable(breachedStructure)) return;
+        if (this._hasAdequateDefense(report)) return;
 
-		if (corePositions.length > 0 && primaryTarget) {
-			var closestCore = Math.min(...corePositions.map(pos => primaryTarget.pos.getRangeTo(pos)));
-			if (closestCore <= 4) {
-				level = 3; // Critical
-			}
-		}
+        var result = controller.activateSafeMode();
+        var message = '🚨 [SAFE MODE] Room ' + this._room.name + ' activation result: ' + result;
+        if (result === OK) {
+            Game.notify(message);
+            info.error(message, this._room);
+        } else {
+            info.warning(message, this._room);
+        }
+    }
 
-		return {
-			level: level,
-			score: totalScore,
-			primaryTarget: primaryTarget,
-			healerCount: healerCount,
-		};
-	}
+    _isDangerous(creep) {
+        return creep.getActiveBodyparts(ATTACK) + creep.getActiveBodyparts(RANGED_ATTACK) + creep.getActiveBodyparts(WORK) > 0;
+    }
 
-	_handleAlerts(threatReport) {
-		if (threatReport.level >= 2) {
-			var now = Game.time;
-			var last = this._memory.lastNotification || 0;
-			if (now - last > 100) {
-				this._memory.lastNotification = now;
-				var message = '🛡️ [DEFENSE ALERT] Invasion in ' + this._room.name + ' at tick ' + now +
-					'! Threat Level: ' + threatReport.level + ', Threat Score: ' + threatReport.score;
-				Game.notify(message);
-				info.error(message, this._room);
-			}
-		}
-	}
+    _isVulnerable(structure) {
+        var coveringRampart = MainCache.find(this._room, FIND_MY_STRUCTURES, {
+            filter: candidate => candidate.structureType === STRUCTURE_RAMPART &&
+                candidate.pos.x === structure.pos.x && candidate.pos.y === structure.pos.y && candidate.hits >= 20000
+        });
+        return coveringRampart.length === 0;
+    }
 
-	_coordinateDefenders(threatReport) {
-		if (!this._room.memory.base || !this._room.memory.base.roleConfig) {
-			return;
-		}
-		var roleConfig = this._room.memory.base.roleConfig;
-		if (!roleConfig.Defender) {
-			roleConfig.Defender = { requiredNumber: 0 };
-		}
+    _hasAdequateDefense(report) {
+        var towers = MainCache.find(this._room, FIND_MY_STRUCTURES, {
+            filter: structure => structure.structureType === STRUCTURE_TOWER
+        });
+        if (DefenseManager.getTowerPlan(this._room, towers).target) return true;
+        var defenderPower = MainCache.find(this._room, FIND_MY_CREEPS, {
+            filter: creep => creep.memory.role === 'Defender'
+        }).reduce((sum, creep) => {
+            return sum + creep.getActiveBodyparts(ATTACK) * 100 +
+                creep.getActiveBodyparts(RANGED_ATTACK) * 120 + creep.getActiveBodyparts(HEAL) * 100;
+        }, 0);
+        return defenderPower > 0 && defenderPower >= report.score;
+    }
 
-		if (threatReport.level >= 2) {
-			var desiredDefenders = threatReport.score > 600 ? 2 : 1;
-			if (roleConfig.Defender.requiredNumber < desiredDefenders) {
-				roleConfig.Defender.requiredNumber = desiredDefenders;
-				info.warning('🛡️ DefenseManager requested ' + desiredDefenders + ' on-demand defenders in ' + this._room.name);
-			}
-		}
-	}
+    static getPriorityTarget(room) {
+        var hostiles = MainCache.find(room, FIND_HOSTILE_CREEPS);
+        if (room.memory.defense && room.memory.defense.primaryTargetId) {
+            var saved = Game.getObjectById(room.memory.defense.primaryTargetId);
+            if (saved) {
+                var current = hostiles.find(hostile => hostile.id === saved.id &&
+                    (hostile.room.name === room.name || hostile.pos.roomName === room.name));
+                if (current) return current;
+            }
+        }
+        return hostiles[0] || null;
+    }
 
-	_standDownDefenders() {
-		if (this._room.memory.base && this._room.memory.base.roleConfig && this._room.memory.base.roleConfig.Defender) {
-			if (this._room.memory.base.roleConfig.Defender.requiredNumber > 0) {
-				this._room.memory.base.roleConfig.Defender.requiredNumber = 0;
-				info.log('🕊️ DefenseManager stood down defenders in ' + this._room.name);
-			}
-		}
-	}
+    static getTowerPlan(room, towers) {
+        var hostiles = MainCache.find(room, FIND_HOSTILE_CREEPS);
+        var priority = this.getPriorityTarget(room);
+        var candidates = hostiles.slice().sort((a, b) => {
+            if (a === b) return 0;
+            if (a === priority) return -1;
+            if (b === priority) return 1;
+            return this._getThreatScore(b) - this._getThreatScore(a);
+        });
 
-	_evaluateSafeMode(threatReport, hostiles) {
-		var controller = this._room.controller;
-		if (!controller || !controller.my) return;
-		if (controller.safeMode || controller.safeModeCooldown || controller.safeModeAvailable === 0) {
-			return;
-		}
+        for (var candidate of candidates) {
+            var attackers = towers.filter(tower => {
+                return tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST && tower.pos.getRangeTo(candidate) <= 20;
+            });
+            if (attackers.length === 0) continue;
+            var damage = attackers.reduce((sum, tower) => sum + this._estimateTowerDamage(tower, candidate), 0);
+            var healing = this._estimateHealing(candidate, hostiles);
+            if (damage > healing) return { target: candidate, attackers };
+        }
+        return { target: null, attackers: [] };
+    }
 
-		if (threatReport.level === 3) {
-			var spawns = MainCache.find(this._room, FIND_MY_SPAWNS);
-			var breach = spawns.some(spawn => hostiles.some(h => h.pos.inRangeTo(spawn, 3)));
-			if (breach) {
-				var result = controller.activateSafeMode();
-				if (result === OK) {
-					var alertMsg = '🚨 [SAFE MODE ACTIVATED] Room ' + this._room.name + ' activated safe mode under critical breach!';
-					Game.notify(alertMsg);
-					info.error(alertMsg, this._room);
-				}
-			}
-		}
-	}
+    static _getThreatScore(creep) {
+        var score = creep.getActiveBodyparts(HEAL) * 150 +
+            creep.getActiveBodyparts(RANGED_ATTACK) * 120 +
+            creep.getActiveBodyparts(ATTACK) * 100 +
+            creep.getActiveBodyparts(WORK) * 80;
+        return creep.body.some(part => !!part.boost) ? score * 2 : score;
+    }
 
-	static getPriorityTarget(room) {
-		if (room.memory.defense && room.memory.defense.primaryTargetId) {
-			var target = Game.getObjectById(room.memory.defense.primaryTargetId);
-			if (target) return target;
-		}
-		var hostiles = MainCache.find(room, FIND_HOSTILE_CREEPS);
-		return hostiles.length > 0 ? hostiles[0] : null;
-	}
+    static _estimateTowerDamage(tower, target) {
+        var range = tower.pos.getRangeTo(target);
+        if (range <= 5) return 600;
+        if (range >= 20) return 150;
+        return 600 - (range - 5) * 30;
+    }
+
+    static _estimateHealing(target, hostiles) {
+        return hostiles.filter(hostile => hostile.pos.inRangeTo(target.pos, 1)).reduce((sum, healer) => {
+            var parts = healer.getActiveBodyparts(HEAL);
+            var boosted = healer.body.some(part => part.type === HEAL && !!part.boost);
+            return sum + parts * 100 * (boosted ? 2 : 1);
+        }, 0);
+    }
 }
 
 module.exports = DefenseManager;
-

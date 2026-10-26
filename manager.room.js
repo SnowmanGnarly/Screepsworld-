@@ -4,6 +4,7 @@
  */
 
 var MainInfo = require('./main.info');
+var MainCache = require('./main.cache');
 var TileArray = require('./tile.array');
 
 class RoomManager {
@@ -65,16 +66,50 @@ class RoomManager {
 	}
 
 	_generateExistingTiles(array) {
+		var terrain = this._room.getTerrain();
+		var objects = MainCache.find(this._room, FIND_STRUCTURES).map(structure => {
+			return { type: LOOK_STRUCTURES, structure: structure };
+		}).concat(MainCache.find(this._room, FIND_SOURCES).map(source => {
+			return { type: LOOK_SOURCES, source: source };
+		})).concat(MainCache.find(this._room, FIND_MINERALS).map(mineral => {
+			return { type: LOOK_MINERALS, mineral: mineral };
+		}));
+		var objectsByPosition = {};
+		objects.forEach(object => {
+			var position = object.structure ? object.structure.pos : object.source ? object.source.pos : object.mineral.pos;
+			var key = position.x + ',' + position.y;
+			if (!objectsByPosition[key]) objectsByPosition[key] = [];
+			objectsByPosition[key].push(object);
+		});
+
 		for (var x = 0; x < array.width; x++) {
 			for (var y = 0; y < array.height; y++) {
-				var value = this._fetchTileAt(x, y);
-				array.set(x, y, value);
+				var terrainValue = terrain.get(x, y);
+				var terrainType = terrainValue === TERRAIN_MASK_WALL ? 'wall' : terrainValue === 2 ? 'swamp' : 'plain';
+				var stuffs = (objectsByPosition[x + ',' + y] || []).concat({ type: LOOK_TERRAIN, terrain: terrainType });
+				array.set(x, y, this._getTileFromStuffs(stuffs));
 			}
 		}
 	}
 
+	_getTileFromStuffs(stuffs) {
+		var toBeBuild = this._filterByTiles(stuffs, RoomManager.TILES_TO_BE_BUILD);
+		if (toBeBuild.length > 0) return toBeBuild[0].character;
+
+		var endless = this._filterByTiles(stuffs, RoomManager.TILES_ENDLESS_STRUCTURES);
+		if (endless.length > 0) return endless[0].character;
+
+		var preset = this._filterByTiles(stuffs, RoomManager.TILES_PRESET);
+		if (preset.length > 0) return preset[0].character;
+
+		var terrain = this._filterByTiles(stuffs, RoomManager.TILES_TERRAIN);
+		if (terrain.length > 0) return terrain[0].character;
+
+		return RoomManager.TILE_UNKNOWN;
+	}
+
 	_generateStructuresToBeBuild(array) {
-		var spawns = this._room.find(FIND_MY_SPAWNS);
+		var spawns = MainCache.find(this._room, FIND_MY_SPAWNS);
 		if (spawns.length > 0) {
 			var spawn = spawns[0];
 			var extensionsCount = this._getExtensionsCount();
@@ -124,21 +159,7 @@ class RoomManager {
 	}
 
 	_fetchTileAt(x, y) {
-		var stuffs = this._room.lookAt(x, y);
-
-		var toBeBuild = this._filterByTiles(stuffs, RoomManager.TILES_TO_BE_BUILD);
-		if (toBeBuild.length > 0) return toBeBuild[0].character;
-
-		var endless = this._filterByTiles(stuffs, RoomManager.TILES_ENDLESS_STRUCTURES);
-		if (endless.length > 0) return endless[0].character;
-
-		var preset = this._filterByTiles(stuffs, RoomManager.TILES_PRESET);
-		if (preset.length > 0) return preset[0].character;
-
-		var terrain = this._filterByTiles(stuffs, RoomManager.TILES_TERRAIN);
-		if (terrain.length > 0) return terrain[0].character;
-
-		return RoomManager.TILE_UNKNOWN;
+		return this._getTileFromStuffs(this._room.lookAt(x, y));
 	}
 
 	_filterByTiles(stuffs, tiles) {

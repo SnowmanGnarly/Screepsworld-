@@ -3,8 +3,6 @@
  * to avoid excessive CPU and memory serialization overhead.
  */
 
-var TileArray = require('./tile.array');
-
 class TileWatcher {
 	
 	constructor(id, room) {
@@ -66,7 +64,5 @@ class TileWatcher {
 		}
 	}
 }
-
-module.exports = TileWatcher;
 
 module.exports = TileWatcher;

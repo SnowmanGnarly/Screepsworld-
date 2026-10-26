@@ -144,6 +144,21 @@ class MemoryManager {
 		this._clearAllRoomRoleInfos(allRoles);
 
 		this._deleteUnusedMemory();
+		this._measureMemory();
+	}
+
+	static _measureMemory() {
+		if (Game.time % 100 !== 0 || typeof RawMemory === 'undefined' || !RawMemory.get || this._memoryMeasuredAt === Game.time) return;
+		this._memoryMeasuredAt = Game.time;
+		this._memorySize = RawMemory.get().length;
+		if (this._memorySize > 1500000 && (!this._lastMemoryWarning || Game.time - this._lastMemoryWarning > 500)) {
+			this._lastMemoryWarning = Game.time;
+			info.warning('Serialized memory is approaching the configured limit: ' + this._memorySize + ' bytes.');
+		}
+	}
+
+	static getMemorySize() {
+		return this._memorySize || 0;
 	}
 
 	/*

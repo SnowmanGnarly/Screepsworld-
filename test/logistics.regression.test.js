@@ -80,7 +80,7 @@ describe('Logistics reliability regressions', function () {
             id: 'partial', sourceId: source.id, targetId: target.id,
             sourceRoomName: room.name, targetRoomName: room.name,
             resourceType: RESOURCE_ENERGY, amount: 500, remaining: 500,
-            priority: 100, standing: true, assignedCreep: null, created: Game.time,
+            priority: 100, standing: true, assignedCreep: null, created: Game.time, state: 'open',
         };
         room.memory.logistics = { tasks: [task] };
         const creep = makeCreep(room, { name: 'carrier', capacity: 300, pos: source.pos });

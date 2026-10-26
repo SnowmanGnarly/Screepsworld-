@@ -20,6 +20,7 @@ var Defender = require('./role.defender');
 
 var MemoryManager = require('./manager.memory');
 var MainCache = require('./main.cache');
+var LogisticsManager = require('./manager.logistics');
 
 class BaseManager {
 	
@@ -79,18 +80,82 @@ class BaseManager {
     		this._spawnCreepForRole(bootstrapRole);
     		return;
     	}
+    	if (this._processMinerReplacements(baseName)) {
+    		return;
+    	}
+
+    	var activeHarvesters = homeCreeps.filter(creep => creep.memory.role == 'Harvester' && !creep.spawning);
+    	if (activeHarvesters.length === 1 && activeHarvesters[0].ticksToLive < 100) {
+    		this._spawnCreepForRole(harvester);
+    		return;
+    	}
+    	var preserveRecoveryReserve = activeHarvesters.length === 1;
 
     	var alreadySpawned = false;
         this._allRoles.forEach(role => {
         	if (alreadySpawned) return;
             var foundNumber = MainCache.getCreepCount(baseName, role.roleName);
             var requiredNumber = MemoryManager.getRequiredNumberForRoomAndRole(this._room, role.roleName);
+            if (role.roleName == 'Storekeeper' || role.roleName == 'Courier') {
+                var roleConfig = this._room.memory.base.roleConfig[role.roleName] || {};
+                var maxNumber = roleConfig.maxNumber === undefined ? (role.roleName == 'Storekeeper' ? 2 : 1) : roleConfig.maxNumber;
+                var desiredNumber = LogisticsManager.getDesiredWorkerCount(this._room, role.roleName);
+                requiredNumber = Math.max(requiredNumber, Math.min(desiredNumber, maxNumber));
+            }
+            if (role.roleName == 'Defender') {
+                var defenderConfig = this._room.memory.base.roleConfig.Defender || {};
+                var maxDefenders = defenderConfig.maxNumber === undefined ? 2 : defenderConfig.maxNumber;
+                var desiredDefenders = this._room.memory.defense ? this._room.memory.defense.desiredDefenders || 0 : 0;
+                requiredNumber = Math.max(requiredNumber, Math.min(desiredDefenders, maxDefenders));
+            }
             if (foundNumber < requiredNumber && role.isNecessary(this._room)) {
+            	if (preserveRecoveryReserve && role.roleName != 'Harvester' && this._room.energyAvailable < 450) {
+            		return;
+            	}
                 if (this._spawnCreepForRole(role)) {
                 	alreadySpawned = true;
                 }
             }
         });
+    }
+
+    _processMinerReplacements(baseName) {
+        if (!Memory.minerReplacements) return false;
+        var requestNames = Object.keys(Memory.minerReplacements).filter(name => {
+            return Memory.minerReplacements[name].home === baseName;
+        }).sort((a, b) => {
+            return Memory.minerReplacements[a].created - Memory.minerReplacements[b].created;
+        });
+        for (var requestName of requestNames) {
+            var request = Memory.minerReplacements[requestName];
+            var requester = Game.creeps[requestName];
+            if (!requester || requester.memory.trainedReplacement || !request.sourceId) {
+                delete Memory.minerReplacements[requestName];
+                continue;
+            }
+            var miner = this._rolesByName.get('Miner');
+            if (!miner) {
+                delete Memory.minerReplacements[requestName];
+                continue;
+            }
+            var spawn = this._fetchFreeSpawn(baseName);
+            if (!spawn && this._room.memory.base.outsourceSpawn) {
+                spawn = this._fetchFreeSpawn();
+            }
+            if (spawn) {
+                var resultingCreep = miner._spawnCreepFromSpawn(spawn, request.sourceId);
+                if (resultingCreep) {
+                    resultingCreep.memory.home = baseName;
+                    requester.memory.trainedReplacement = true;
+                    delete Memory.minerReplacements[requestName];
+                    if (spawn.memory.debug) {
+                        info.log(miner.symbol + ' Spawning replacement Miner (' + resultingCreep.body.length + 'p)', this._room);
+                    }
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     _warnAboutRecovery() {

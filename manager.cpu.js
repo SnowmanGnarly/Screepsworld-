@@ -3,6 +3,7 @@
  */
  
 var MainUtil = require('./main.util');
+var info = require('./main.info');
 
 class GcManager {
 
@@ -12,6 +13,20 @@ class GcManager {
     
 	static initRound() {
 		this._measurements = [];
+		var previousState = this._degraded;
+		if (Game.cpu.bucket < 1000) {
+			this._degraded = true;
+		} else if (Game.cpu.bucket > 1500) {
+			this._degraded = false;
+		}
+		if (previousState !== this._degraded && this._degraded && Game.time - (this._lastDeferredNotice || 0) > 100) {
+			this._lastDeferredNotice = Game.time;
+			info.warning('CPU bucket is low; deferring non-essential work.');
+		}
+	}
+
+	static shouldRunDeferred() {
+		return !this._degraded;
 	}
 	
     /*

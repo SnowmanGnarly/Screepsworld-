@@ -1,4 +1,6 @@
 const MainCache = require('../../main.cache');
+const MainInfo = require('../../main.info');
+MainInfo.__originalLog = MainInfo.log;
 
 const constants = {
     RESOURCE_ENERGY: 'energy', RESOURCE_OXYGEN: 'oxygen', RESOURCE_ZYNTHIUM: 'zynthium',
@@ -23,6 +25,8 @@ const constants = {
     TOWER_ENERGY_COST: 10, TERRAIN_MASK_WALL: 1,
 };
 
+Object.assign(global, constants);
+
 class MockRoomPosition {
     constructor(x, y, roomName) {
         this.x = x;
@@ -31,6 +35,7 @@ class MockRoomPosition {
     }
 
     getRangeTo(target, y) {
+        if (typeof target === 'object' && target.pos) target = target.pos;
         const x = typeof target === 'object' ? target.x : target;
         const otherY = typeof target === 'object' ? target.y : y;
         return Math.max(Math.abs(this.x - x), Math.abs(this.y - otherY));

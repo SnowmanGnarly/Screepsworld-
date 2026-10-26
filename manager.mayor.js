@@ -6,6 +6,7 @@
 
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
+var constants = require('./main.constants');
 var info = require('./main.info');
 
 var RoadManager = require('./manager.road');
@@ -105,6 +106,7 @@ class MayorManager {
 		}
 		for (var i = 0; i < roadPositions.length; i++) {
 			if (roadPositions[i].createConstructionSite(STRUCTURE_ROAD) == OK) {
+				this._getPlacementSnapshot().occupied.add(roadPositions[i].x + ',' + roadPositions[i].y);
 				MainCache.invalidateRoom(this._room, FIND_CONSTRUCTION_SITES);
 				MainCache.invalidateRoom(this._room, FIND_MY_CONSTRUCTION_SITES);
 				this._cache.constructionSites = MainCache.find(this._room, FIND_CONSTRUCTION_SITES);
@@ -203,6 +205,7 @@ class MayorManager {
 		// Prioritized structure building list (RCL 1 - 8 unlocks)
 		for (var i = 0; i < RoomManager.TILES_TO_BE_BUILD.length; i++) {
 			var tileToBeBuild = RoomManager.TILES_TO_BE_BUILD[i];
+			if (!this._isStructureEnabled(tileToBeBuild.structureType)) continue;
 			var freeSlots = roomManager.fetchFreeBuildingSlots(tileToBeBuild.character);
 
 			if (freeSlots > 0) {
@@ -219,6 +222,7 @@ class MayorManager {
 		if (!somethingWasBuilt) {
 			for (var j = 0; j < RoomManager.TILES_ENDLESS_STRUCTURES.length; j++) {
 				var tileEndless = RoomManager.TILES_ENDLESS_STRUCTURES[j];
+				if (!this._isStructureEnabled(tileEndless.structureType)) continue;
 				var buildingPositions = this._fetchBuildingSitePositionsForTile(roomManager, tileEndless);
 
 				if (buildingPositions.length > 0) {
@@ -231,6 +235,14 @@ class MayorManager {
 				}
 			}
 		}
+	}
+
+	_isStructureEnabled(structureType) {
+		if (structureType === STRUCTURE_NUKER) return !!this._memory.enableNuker;
+		if (structureType === STRUCTURE_WALL || structureType === STRUCTURE_RAMPART) {
+			return !!this._memory.enableFortification;
+		}
+		return true;
 	}
 
 	_buildStructure(roomManager, tileToBeBuild) {
@@ -296,50 +308,35 @@ class MayorManager {
 			return this._findClearTileAround(anchorFact, 1, 2);
 		}
 
-		// 6. Links: 1 near source, 1 near controller, 1 near storage
+		// 6. Links: sources are senders; controller and storage are receivers
 		if (structureType === STRUCTURE_LINK) {
-			var existingLinks = MainCache.find(this._room, FIND_MY_STRUCTURES, { filter: s => s.structureType === STRUCTURE_LINK });
+			var links = this._getStructuresAndSites(STRUCTURE_LINK);
 			var sources = MainCache.find(this._room, FIND_SOURCES);
-
-			// Link near sources
 			for (var s = 0; s < sources.length; s++) {
-				var src = sources[s];
-				var hasLinkNear = existingLinks.some(l => l.pos.inRangeTo(src, 2));
-				if (!hasLinkNear) {
-					var pos = this._findClearTileAround(src.pos, 1, 2);
-					if (pos) return pos;
+				if (!this._hasLinkRoleNear(links, sources[s].pos, constants.LINK_TYPE_SOURCE)) {
+					return this._placeLinkNear(sources[s].pos, constants.LINK_TYPE_SOURCE);
 				}
 			}
-
-			// Link near controller
-			if (this._room.controller) {
-				var hasControllerLink = existingLinks.some(l => l.pos.inRangeTo(this._room.controller, 2));
-				if (!hasControllerLink) {
-					var ctrlPos = this._findClearTileAround(this._room.controller.pos, 2, 2);
-					if (ctrlPos) return ctrlPos;
-				}
+			if (this._room.controller && !this._hasLinkRoleNear(links, this._room.controller.pos, constants.LINK_TYPE_TARGET)) {
+				return this._placeLinkNear(this._room.controller.pos, constants.LINK_TYPE_TARGET, 2);
 			}
-
-			// Link near storage
-			if (this._room.storage) {
-				var hasStorageLink = existingLinks.some(l => l.pos.inRangeTo(this._room.storage, 2));
-				if (!hasStorageLink) {
-					var storPos = this._findClearTileAround(this._room.storage.pos, 1, 2);
-					if (storPos) return storPos;
-				}
+			if (this._room.storage && !this._hasLinkRoleNear(links, this._room.storage.pos, constants.LINK_TYPE_TARGET)) {
+				return this._placeLinkNear(this._room.storage.pos, constants.LINK_TYPE_TARGET);
 			}
 		}
 
-		// 7. Labs: Grouped within reaction range (<= 2 tiles of anchor lab)
+		// 7. Labs: outputs stay within reaction range of both reagent anchors
 		if (structureType === STRUCTURE_LAB) {
-			var existingLabs = MainCache.find(this._room, FIND_MY_STRUCTURES, { filter: s => s.structureType === STRUCTURE_LAB });
-			if (existingLabs.length === 0) {
-				// Anchor lab near storage or spawn (range 4-5)
+			var labs = this._getStructuresAndSites(STRUCTURE_LAB).sort((a, b) => {
+				return a.pos.x - b.pos.x || a.pos.y - b.pos.y;
+			});
+			if (labs.length === 0) {
 				return this._findClearTileAround(primarySpawn.pos, 4, 5);
-			} else {
-				// Subsequent labs must be within range 2 of existing lab
-				return this._findClearTileAround(existingLabs[0].pos, 1, 2);
 			}
+			if (labs.length === 1) {
+				return this._findClearTileAround(labs[0].pos, 1, 2);
+			}
+			return this._findClearTileAround(labs[0].pos, 1, 2, position => position.inRangeTo(labs[1].pos, 2));
 		}
 
 		// 8. Subsequent Spawns (RCL 7 and 8)
@@ -350,7 +347,46 @@ class MayorManager {
 		return null;
 	}
 
-	_findClearTileAround(centerPos, minRange, maxRange) {
+	_getStructuresAndSites(structureType) {
+		return MainCache.find(this._room, FIND_MY_STRUCTURES, {
+			filter: structure => structure.structureType === structureType
+		}).concat(MainCache.find(this._room, FIND_MY_CONSTRUCTION_SITES, {
+			filter: site => site.structureType === structureType
+		}));
+	}
+
+	_hasLinkRoleNear(links, anchorPos, role) {
+		return links.some(link => link.pos.inRangeTo(anchorPos, 2) && this._getLinkRole(link) === role);
+	}
+
+	_getLinkRole(link) {
+		if (link.memory && link.memory.type) return link.memory.type;
+		var planned = this._getRoomManagerMemory().linkRoles[link.pos.x + ',' + link.pos.y];
+		if (planned) return planned;
+		if (this._room.controller && link.pos.inRangeTo(this._room.controller.pos, 2)) {
+			return constants.LINK_TYPE_TARGET;
+		}
+		if (this._room.storage && link.pos.inRangeTo(this._room.storage.pos, 2)) {
+			return constants.LINK_TYPE_TARGET;
+		}
+		return constants.LINK_TYPE_SOURCE;
+	}
+
+	_placeLinkNear(anchorPos, role, minRange = 1) {
+		var position = this._findClearTileAround(anchorPos, minRange, 2);
+		if (position) {
+			this._getRoomManagerMemory().linkRoles[position.x + ',' + position.y] = role;
+		}
+		return position;
+	}
+
+	_getRoomManagerMemory() {
+		if (!this._room.memory.roomManager) this._room.memory.roomManager = {};
+		if (!this._room.memory.roomManager.linkRoles) this._room.memory.roomManager.linkRoles = {};
+		return this._room.memory.roomManager;
+	}
+
+	_findClearTileAround(centerPos, minRange, maxRange, additionalFilter = () => true) {
 		for (var dx = -maxRange; dx <= maxRange; dx++) {
 			for (var dy = -maxRange; dy <= maxRange; dy++) {
 				var range = Math.max(Math.abs(dx), Math.abs(dy));
@@ -361,7 +397,7 @@ class MayorManager {
 				if (x < 2 || x > 47 || y < 2 || y > 47) continue;
 
 				var testPos = new RoomPosition(x, y, this._room.name);
-				if (this._isPositionBuildable(testPos)) {
+				if (this._isPositionBuildable(testPos) && additionalFilter(testPos)) {
 					return testPos;
 				}
 			}
@@ -369,23 +405,33 @@ class MayorManager {
 		return null;
 	}
 
+	_getPlacementSnapshot() {
+		if (!this._placementSnapshot) {
+			var occupied = new Set();
+			MainCache.find(this._room, FIND_STRUCTURES).forEach(structure => {
+				occupied.add(structure.pos.x + ',' + structure.pos.y);
+			});
+			MainCache.find(this._room, FIND_CONSTRUCTION_SITES).forEach(site => {
+				occupied.add(site.pos.x + ',' + site.pos.y);
+			});
+			this._placementSnapshot = {
+				terrain: this._room.getTerrain(),
+				occupied,
+			};
+		}
+		return this._placementSnapshot;
+	}
+
 	_isPositionBuildable(pos) {
-		var terrain = this._room.getTerrain().get(pos.x, pos.y);
-		if (terrain === TERRAIN_MASK_WALL) return false;
-
-		var structures = pos.lookFor(LOOK_STRUCTURES);
-		if (structures.length > 0) return false;
-
-		var sites = pos.lookFor(LOOK_CONSTRUCTION_SITES);
-		if (sites.length > 0) return false;
-
-		return true;
+		var snapshot = this._getPlacementSnapshot();
+		if (snapshot.terrain.get(pos.x, pos.y) === TERRAIN_MASK_WALL) return false;
+		return !snapshot.occupied.has(pos.x + ',' + pos.y);
 	}
 
 	_fetchBuildingSitePositionsForTile(roomManager, tileToBeBuild) {
 		var spawn = MainCache.find(this._room, FIND_MY_SPAWNS)[0];
 		var positions = roomManager.fetchBuildingSitePositionsForTile(tileToBeBuild.character)
-			.filter(pos => (pos.look().filter(obj => obj.type == LOOK_STRUCTURES || obj.type == LOOK_CONSTRUCTION_SITES).length == 0));
+			.filter(pos => this._isPositionBuildable(pos));
 		if (spawn) {
 			positions.sort((a, b) => spawn.pos.getRangeTo(a.x, a.y) - spawn.pos.getRangeTo(b.x, b.y));
 		}
@@ -395,6 +441,7 @@ class MayorManager {
 	_buildStructureAtPosition(buildingPosition, tileToBeBuild) {
 		var constructionResult = buildingPosition.createConstructionSite(tileToBeBuild.structureType);
 		if (constructionResult == OK) {
+			this._getPlacementSnapshot().occupied.add(buildingPosition.x + ',' + buildingPosition.y);
 			MainCache.invalidateRoom(this._room, FIND_CONSTRUCTION_SITES);
 			MainCache.invalidateRoom(this._room, FIND_MY_CONSTRUCTION_SITES);
 			this._cache.constructionSites = MainCache.find(this._room, FIND_CONSTRUCTION_SITES);

@@ -260,8 +260,8 @@ class RolePrototype {
 			if (!specificSource) {
 				info.error(MainUtil.getDisplayName(creep) + ' could not find source: ' + creep.memory.source);
 
-				if (this._sourceMode != RolePrototype.TARGET_MODE_USE_IF_VALID) {
-					// only in TARGET_MODE_USE_IF_VALID can we recover from that error
+				if (this._sourceMode != RolePrototype.SOURCE_MODE_USE_IF_VALID) {
+					// only in SOURCE_MODE_USE_IF_VALID can we recover from that error
 					return null;
 				}
 			}
@@ -275,9 +275,9 @@ class RolePrototype {
 					return found[0];
 				}
 				// our specific source is not valid 
-				// - TARGET_MODE_USE_OR_ERROR errors out
-				// - TARGET_MODE_USE_IF_VALID falls back to valid source
-				if (this._sourceMode == RolePrototype.TARGET_MODE_USE_OR_ERROR) {
+				// - SOURCE_MODE_USE_OR_ERROR errors out
+				// - SOURCE_MODE_USE_IF_VALID falls back to valid source
+				if (this._sourceMode == RolePrototype.SOURCE_MODE_USE_OR_ERROR) {
 					info.error(MainUtil.getDisplayName(creep) + ' could not find source in list: ' + creep.memory.source);
 					return null;
 				}
@@ -415,7 +415,10 @@ class RolePrototype {
 
 		if (creep.memory.moveToGameObject) {
 			var gameObject = Game.getObjectById(creep.memory.moveToGameObject);
-			if (creep.pos.isNearTo(gameObject)) {
+			if (!gameObject) {
+				info.warning(MainUtil.getDisplayName(creep) + ' could not find movement target: ' + creep.memory.moveToGameObject);
+				creep.memory.moveToGameObject = null;
+			} else if (creep.pos.isNearTo(gameObject)) {
 				creep.memory.moveToGameObject = null;
 			} else {
 				this._moveToLocation(creep, gameObject);
@@ -427,6 +430,11 @@ class RolePrototype {
 
 		if (creep.memory.selfdestruct) {
 			this._selfdestruct(creep);
+			return;
+		}
+
+		if (this._disableAutomaticLoot) {
+			this._work(creep);
 			return;
 		}
 
@@ -630,10 +638,12 @@ class RolePrototype {
 	 */
 
 	_commuteBetweenSourceAndTarget(creep, work) {
-		if (creep.memory.working && creep.store.getUsedCapacity(this._resourceType) == 0) {
+		var usedCapacity = creep.store.getUsedCapacity(this._resourceType) || 0;
+		if (creep.memory.working && usedCapacity == 0) {
 			creep.memory.working = false;
 		}
-		if (!creep.memory.working && creep.store.getFreeCapacity(this._resourceType) == 0) {
+		if (!creep.memory.working && (creep.store.getFreeCapacity(this._resourceType) == 0 ||
+			(usedCapacity > 0 && this._findSources(this._baseRoom).length == 0))) {
 			creep.memory.working = true;
 		}
 

@@ -107,11 +107,12 @@ class Miner extends RolePrototype {
 			var ticksToGetReady = (creep.memory.initialTicksToLive - creep.memory.ticksToSource) + timeToSpawn;
 
 			if (creep.ticksToLive < ticksToGetReady) {
-				var spawnedCreep = this.spawnCreepFromSpawnName(creep.memory.homeSpawn, creep.memory.source);
-				if (spawnedCreep) {
-					info.log(this.symbol + ' Training the replacement ' + this.roleName, this._baseRoom);
-					creep.memory.trainedReplacement = true;
-				}
+				if (!Memory.minerReplacements) Memory.minerReplacements = {};
+				Memory.minerReplacements[creep.name] = {
+					home: creep.memory.home,
+					sourceId: creep.memory.source,
+					created: Game.time,
+				};
 			}
 		}
 	}

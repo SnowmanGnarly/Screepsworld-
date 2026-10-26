@@ -65,11 +65,23 @@ class LinkManager {
 	 * Handles all links in this room.
 	 */
 	
-	runLinks() { 
-		// TODO: implement transferId 
-		
+	runLinks() {
+		this._applyPlannedRoles();
 		var allSourceLinks = this._findSourceLinks();
 		allSourceLinks.forEach(sourceLink => this._runLink(sourceLink));
+	}
+
+	_applyPlannedRoles() {
+		var managerMemory = this._room.memory.roomManager;
+		if (!managerMemory || !managerMemory.linkRoles) return;
+		MainCache.find(this._room, FIND_MY_STRUCTURES, {
+			filter: structure => structure.structureType == STRUCTURE_LINK
+		}).forEach(link => {
+			var plannedRole = managerMemory.linkRoles[link.pos.x + ',' + link.pos.y];
+			if (!plannedRole) return;
+			var memory = MainUtil.fetchMemoryOfStructure(link);
+			if (!memory.type) memory.type = plannedRole;
+		});
 	}
 
 	/*

@@ -93,7 +93,7 @@ class MainInfo {
         
         for (const lineIndex in this._lines) {
         	var lineRoom = this._lineRooms[lineIndex];
-        	if (lineRoom && lineRoom != room) {
+        	if (lineRoom && lineRoom != room.name) {
         		continue;
         	}
         	
@@ -145,7 +145,8 @@ class MainInfo {
         this._lines.splice(0, 0, displayLine);
         this._lines = this._lines.slice(0, height);
         
-        this._lineRooms.splice(0, 0, room);
+        var lineRoomName = room && room.name ? room.name : room;
+        this._lineRooms.splice(0, 0, lineRoomName);
         this._lineRooms = this._lineRooms.slice(0, height);
     }
 
