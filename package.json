@@ -1,0 +1,18 @@
+{
+  "name": "screeps-ras-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Screeps bot with logistics, construction, and defense managers",
+  "type": "commonjs",
+  "scripts": {
+    "test": "npm run test:unit && npm run typecheck",
+    "test:unit": "mocha \"test/**/*.test.js\"",
+    "typecheck": "tsc --noEmit -p jsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/screeps": "^3.4.0",
+    "mocha": "^12.0.3",
+    "typescript": "^7.0.2"
+  }
+}
