@@ -1,6 +1,7 @@
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
 var info = require('./main.info');
+var TerminalManager = require('./manager.terminal');
 
 const TASK_CAP = 100;
 const KIND_SUPPLY = 'supply';
@@ -227,6 +228,9 @@ class LogisticsManager {
             }
         }
 
+        if (task.factoryInput && task.resourceType === RESOURCE_ENERGY) {
+            task.remaining = Math.min(task.remaining, TerminalManager.getAvailable(this._room, RESOURCE_ENERGY));
+        }
         task.state = task.remaining > 0 && source && target && sourceAmount > 0 && targetFree > 0 ? 'open' : 'unavailable';
     }
 
@@ -294,15 +298,56 @@ class LogisticsManager {
         });
 
         var factories = MainCache.find(this._room, FIND_MY_STRUCTURES, {
-            filter: structure => structure.structureType == STRUCTURE_FACTORY && structure.memory && structure.memory.outputResourceType
+            filter: structure => structure.structureType == STRUCTURE_FACTORY
         });
-        factories.forEach(factory => {
-            if (factory.store.getUsedCapacity(factory.memory.outputResourceType) > 0) {
-                this._createCollectionTask(factory, factory.memory.outputResourceType, 60);
-            }
-        });
+        this._generateFactoryTasks(factories);
 
         this._generateStockBalancingTasks();
+        this._generateTerminalPositioningTasks();
+    }
+
+    _generateFactoryTasks(factories) {
+        factories.forEach(factory => {
+            var memory = MainUtil.fetchMemoryOfStructure(factory);
+            var inputs = Object.assign({}, memory.inputResources || {});
+            if (memory.inputResourceType && inputs[memory.inputResourceType] === undefined) {
+                inputs[memory.inputResourceType] = memory.targetAmount || 1000;
+            }
+            if (Array.isArray(memory.inputResourceTypes)) {
+                memory.inputResourceTypes.forEach(resourceType => {
+                    if (inputs[resourceType] === undefined) inputs[resourceType] = memory.targetAmount || 1000;
+                });
+            }
+            Object.keys(inputs).sort().forEach(resourceType => {
+                var required = Math.max(0, Number(inputs[resourceType]) || 0);
+                var missing = required - factory.store.getUsedCapacity(resourceType);
+                if (missing > 0) this._createFactorySupplyTask(factory, resourceType, missing);
+            });
+
+            var outputs = new Set();
+            if (memory.outputResourceType) outputs.add(memory.outputResourceType);
+            if (memory.activeRecipe) outputs.add(memory.activeRecipe);
+            if (Array.isArray(memory.outputResources)) memory.outputResources.forEach(resourceType => outputs.add(resourceType));
+            else if (memory.outputResources && typeof memory.outputResources === 'object') {
+                Object.keys(memory.outputResources).forEach(resourceType => outputs.add(resourceType));
+            }
+            outputs.forEach(resourceType => {
+                if (factory.store.getUsedCapacity(resourceType) > 0) this._createCollectionTask(factory, resourceType, 60);
+            });
+        });
+    }
+
+    _createFactorySupplyTask(factory, resourceType, amount) {
+        var source = this._findBestResourceSourceFor(factory, resourceType);
+        if (!source) return null;
+        amount = Math.min(amount, factory.store.getFreeCapacity(resourceType));
+        if (resourceType === RESOURCE_ENERGY) {
+            amount = Math.min(amount, TerminalManager.getAvailable(this._room, RESOURCE_ENERGY));
+        }
+        if (amount <= 0) return null;
+        var task = this._createTask(source.id, factory.id, resourceType, amount, 60, KIND_SUPPLY);
+        if (task) task.factoryInput = true;
+        return task;
     }
 
     _generateStockBalancingTasks() {
@@ -313,6 +358,31 @@ class LogisticsManager {
             var source = hubs.find(hub => hub.store.getUsedCapacity(resourceType) > rule.max);
             var target = hubs.find(hub => source && hub.id !== source.id && hub.store.getUsedCapacity(resourceType) < rule.min);
             if (source && target) this._createTask(source.id, target.id, resourceType, source.store.getUsedCapacity(resourceType) - rule.max, 30, KIND_SUPPLY);
+        });
+    }
+
+    _generateTerminalPositioningTasks() {
+        var policy = this._memory.terminalStockPolicy || {};
+        var manualPolicy = this._memory.stockPolicy || {};
+        var storage = this._room.storage;
+        var terminal = this._room.terminal;
+        if (!storage || !terminal) return;
+        Object.keys(policy).sort().forEach(resourceType => {
+            if (Object.prototype.hasOwnProperty.call(manualPolicy, resourceType)) return;
+            var rule = policy[resourceType] || {};
+            var minimum = Math.max(0, Number(rule.min) || 0);
+            var maximum = Math.max(minimum, Number(rule.max) || 0);
+            var priority = Math.max(0, Number(rule.priority) || 40);
+            var terminalAmount = terminal.store.getUsedCapacity(resourceType);
+            var storageAmount = storage.store.getUsedCapacity(resourceType);
+            if (terminalAmount < minimum && storageAmount > 0) {
+                var inbound = Math.min(minimum - terminalAmount, storageAmount, terminal.store.getFreeCapacity(resourceType));
+                if (inbound > 0) this._createTask(storage.id, terminal.id, resourceType, inbound, priority, KIND_SUPPLY);
+            }
+            if (terminalAmount > maximum && storage.store.getFreeCapacity(resourceType) > 0) {
+                var outbound = Math.min(terminalAmount - maximum, storage.store.getFreeCapacity(resourceType));
+                if (outbound > 0) this._createTask(terminal.id, storage.id, resourceType, outbound, priority, KIND_SUPPLY);
+            }
         });
     }
 

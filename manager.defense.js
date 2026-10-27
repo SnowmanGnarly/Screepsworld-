@@ -2,23 +2,38 @@ var constants = require('./main.constants');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
 var info = require('./main.info');
+var RemoteManager = require('./manager.remote');
 
 class DefenseManager {
 
     static runAll() {
+        var defendedRooms = new Set();
         MainUtil.findAllRooms().forEach(room => {
             if (!room.memory.base) return;
-            try {
-                new DefenseManager(room).run();
-            } catch (error) {
-                info.error('Could not run defense for ' + room.name + ': ' + error, room);
-                console.log(error.stack);
-            }
+            defendedRooms.add(room.name);
+            this._runRoom(room);
+        });
+        RemoteManager.getConfiguredOutposts().forEach(mission => {
+            var room = Game.rooms[mission.targetRoom];
+            if (!room || defendedRooms.has(room.name)) return;
+            defendedRooms.add(room.name);
+            this._runRoom(room, { outpost: true, mission: mission });
         });
     }
 
-    constructor(room) {
+    static _runRoom(room, options = {}) {
+        try {
+            new DefenseManager(room, options).run();
+        } catch (error) {
+            info.error('Could not run defense for ' + room.name + ': ' + error, room);
+            console.log(error.stack);
+        }
+    }
+
+    constructor(room, options = {}) {
         this._room = room;
+        this._outpost = !!options.outpost;
+        this._mission = options.mission || null;
         this._memory = this._fetchMemory();
     }
 
@@ -39,7 +54,8 @@ class DefenseManager {
 
     run() {
         var hostiles = MainCache.find(this._room, FIND_HOSTILE_CREEPS);
-        var report = this._assessThreat(hostiles);
+        var hostileStructures = MainCache.find(this._room, FIND_HOSTILE_STRUCTURES);
+        var report = this._assessThreat(hostiles, hostileStructures);
         this._memory.threatLevel = report.level;
         this._memory.threatScore = report.score;
         this._memory.primaryTargetId = report.primaryTarget ? report.primaryTarget.id : null;
@@ -48,15 +64,25 @@ class DefenseManager {
             this._memory.alarmTicks++;
             this._handleAlerts(report);
             this._coordinateDefenders(report);
-            this._evaluateSafeMode(report, hostiles);
+            if (!this._outpost) this._evaluateSafeMode(report, hostiles);
         } else {
             this._memory.alarmTicks = 0;
             this._standDownDefenders();
         }
+        if (this._outpost && this._mission) {
+            this._mission.defense = {
+                threatLevel: report.level,
+                threatScore: report.score,
+                primaryTargetId: this._memory.primaryTargetId,
+                desiredDefenders: this._memory.desiredDefenders,
+                preferredStyle: this._memory.preferredStyle || report.preferredStyle,
+                updated: Game.time,
+            };
+        }
     }
 
-    _assessThreat(hostiles) {
-        if (hostiles.length === 0) {
+    _assessThreat(hostiles, hostileStructures = []) {
+        if (hostiles.length === 0 && hostileStructures.length === 0) {
             return { level: 0, score: 0, primaryTarget: null, healerCount: 0, preferredStyle: 'melee' };
         }
 
@@ -82,11 +108,16 @@ class DefenseManager {
             totalScore += score;
             return { creep: hostile, score, healParts, attackParts, rangedParts, workParts };
         });
-        scoredHostiles.sort((a, b) => b.score - a.score);
+        var scoredStructures = hostileStructures.map(structure => {
+            var score = structure.structureType === STRUCTURE_INVADER_CORE ? 500 : 200;
+            totalScore += score;
+            return { creep: structure, score, healParts: 0, attackParts: 0, rangedParts: 0, workParts: 0 };
+        });
+        var scoredTargets = scoredHostiles.concat(scoredStructures).sort((a, b) => b.score - a.score);
 
-        var primary = scoredHostiles[0];
+        var primary = scoredTargets[0];
         var level = 1;
-        if (totalScore >= 200 || scoredHostiles.some(hostile => hostile.attackParts > 0 || hostile.rangedParts > 0 || hostile.healParts > 0)) {
+        if (totalScore >= 200 || scoredTargets.some(hostile => hostile.attackParts > 0 || hostile.rangedParts > 0 || hostile.healParts > 0)) {
             level = 2;
         }
         if (corePositions.length > 0 && primary.workParts + primary.attackParts + primary.rangedParts + primary.healParts > 0) {
@@ -116,10 +147,12 @@ class DefenseManager {
     }
 
     _coordinateDefenders(report) {
-        var desired = report.level >= 2 ? (report.score > 600 ? 2 : 1) : 0;
-        this._memory.desiredDefenders = desired;
-        var baseName = this._room.memory.base.name;
-        var defenders = MainCache.getCreepsByHome(baseName).filter(creep => creep.memory.role === 'Defender');
+        var desired = report.level >= 2 || (this._outpost && report.level > 0) ? (report.score > 600 ? 2 : 1) : 0;
+        this._memory.desiredDefenders = Math.min(2, desired);
+        var baseName = this._outpost ? this._mission.home : this._room.memory.base.name;
+        var defenders = MainCache.getCreepsByHome(baseName).filter(creep => {
+            return creep.memory.role === 'Defender' && (!this._outpost || creep.memory.missionId === this._mission.id);
+        });
         this._memory.preferredStyle = report.healerCount > 0 && defenders.length > 0 ? 'support' : report.preferredStyle;
     }
 
@@ -178,19 +211,21 @@ class DefenseManager {
 
     static getPriorityTarget(room) {
         var hostiles = MainCache.find(room, FIND_HOSTILE_CREEPS);
+        var hostileStructures = MainCache.find(room, FIND_HOSTILE_STRUCTURES);
+        var targets = hostiles.concat(hostileStructures);
         if (room.memory.defense && room.memory.defense.primaryTargetId) {
             var saved = Game.getObjectById(room.memory.defense.primaryTargetId);
             if (saved) {
-                var current = hostiles.find(hostile => hostile.id === saved.id &&
+                var current = targets.find(hostile => hostile.id === saved.id &&
                     (hostile.room.name === room.name || hostile.pos.roomName === room.name));
                 if (current) return current;
             }
         }
-        return hostiles[0] || null;
+        return targets[0] || null;
     }
 
     static getTowerPlan(room, towers) {
-        var hostiles = MainCache.find(room, FIND_HOSTILE_CREEPS);
+        var hostiles = MainCache.find(room, FIND_HOSTILE_CREEPS).concat(MainCache.find(room, FIND_HOSTILE_STRUCTURES));
         var priority = this.getPriorityTarget(room);
         var candidates = hostiles.slice().sort((a, b) => {
             if (a === b) return 0;
@@ -212,6 +247,7 @@ class DefenseManager {
     }
 
     static _getThreatScore(creep) {
+        if (!creep.getActiveBodyparts) return creep.structureType === STRUCTURE_INVADER_CORE ? 500 : 200;
         var score = creep.getActiveBodyparts(HEAL) * 150 +
             creep.getActiveBodyparts(RANGED_ATTACK) * 120 +
             creep.getActiveBodyparts(ATTACK) * 100 +
@@ -227,7 +263,7 @@ class DefenseManager {
     }
 
     static _estimateHealing(target, hostiles) {
-        return hostiles.filter(hostile => hostile.pos.inRangeTo(target.pos, 1)).reduce((sum, healer) => {
+        return hostiles.filter(hostile => hostile.getActiveBodyparts && hostile.pos.inRangeTo(target.pos, 1)).reduce((sum, healer) => {
             var parts = healer.getActiveBodyparts(HEAL);
             var boosted = healer.body.some(part => part.type === HEAL && !!part.boost);
             return sum + parts * 100 * (boosted ? 2 : 1);

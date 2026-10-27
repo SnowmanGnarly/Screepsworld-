@@ -17,6 +17,10 @@ var Explorer = require('./role.explorer');
 var Miner = require('./role.miner');
 var StoreKeeper = require('./role.storekeeper');
 var Defender = require('./role.defender');
+var Scout = require('./role.scout');
+var Reserver = require('./role.reserver');
+var RemoteMiner = require('./role.remoteMiner');
+var RemoteHauler = require('./role.remoteHauler');
 
 var MemoryManager = require('./manager.memory');
 var MainCache = require('./main.cache');
@@ -39,9 +43,23 @@ class BaseManager {
 	    	new Miner(),
 	    	new StoreKeeper(),
 	    	new Courier(),
+		    new Scout(),
+		    new Reserver(),
+		    new RemoteMiner(),
+		    new RemoteHauler(),
 	    ].sort((a, b) => b.priority - a.priority);
 	}
 	
+	static registerMissionSpawnProvider(name, provider) {
+		if (!name || !provider) return false;
+		this._missionSpawnProviders.set(name, provider);
+		return true;
+	}
+
+	static unregisterMissionSpawnProvider(name) {
+		this._missionSpawnProviders.delete(name);
+	}
+
 	constructor(room, allRoles = BaseManager.fetchAllRoles()) {
 	    this._room = room;
 	    this._defaultRole = new Harvester();
@@ -91,7 +109,11 @@ class BaseManager {
     	}
     	var preserveRecoveryReserve = activeHarvesters.length === 1;
 
-    	var alreadySpawned = false;
+    if (this._processMissionSpawnRequests(baseName, preserveRecoveryReserve)) {
+			return;
+		}
+
+	    var alreadySpawned = false;
         this._allRoles.forEach(role => {
         	if (alreadySpawned) return;
             var foundNumber = MainCache.getCreepCount(baseName, role.roleName);
@@ -103,6 +125,9 @@ class BaseManager {
                 requiredNumber = Math.max(requiredNumber, Math.min(desiredNumber, maxNumber));
             }
             if (role.roleName == 'Defender') {
+                foundNumber = MainCache.getCreepsByHome(baseName).filter(creep => {
+                    return creep.memory.role === 'Defender' && !creep.memory.missionId;
+                }).length;
                 var defenderConfig = this._room.memory.base.roleConfig.Defender || {};
                 var maxDefenders = defenderConfig.maxNumber === undefined ? 2 : defenderConfig.maxNumber;
                 var desiredDefenders = this._room.memory.defense ? this._room.memory.defense.desiredDefenders || 0 : 0;
@@ -156,6 +181,53 @@ class BaseManager {
             return true;
         }
         return false;
+    }
+
+    _processMissionSpawnRequests(baseName, preserveRecoveryReserve) {
+        if (preserveRecoveryReserve && this._room.energyAvailable < 450) return false;
+        var requests = [];
+        BaseManager._missionSpawnProviders.forEach((provider, providerName) => {
+            try {
+                var produced = typeof provider === 'function'
+                    ? provider(baseName, this._room)
+                    : provider.getSpawnRequests(baseName, this._room);
+                (produced || []).slice(0, 100).forEach(request => {
+                    if (request && request.home === baseName) requests.push({ request, provider, providerName });
+                });
+            } catch (error) {
+                info.error('Mission spawn provider ' + providerName + ' failed: ' + error, this._room);
+            }
+        });
+        requests.sort((a, b) => (b.request.priority || 0) - (a.request.priority || 0) ||
+            (a.request.created || 0) - (b.request.created || 0) || String(a.request.id).localeCompare(String(b.request.id)));
+        var seen = new Set();
+        for (var entry of requests) {
+            var key = entry.request.id || entry.providerName + ':' + entry.request.role;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            if (!this._rolesByName.has(entry.request.role)) continue;
+            var resultingCreep = this._spawnMissionRequest(entry);
+            if (resultingCreep) return true;
+        }
+        return false;
+    }
+
+    _spawnMissionRequest(entry) {
+        var request = entry.request;
+        var role = this._rolesByName.get(request.role);
+        var spawn = this._fetchFreeSpawn(this._room.memory.base.name);
+        if (!spawn && this._room.memory.base.outsourceSpawn) spawn = this._fetchFreeSpawn();
+        if (!spawn) return false;
+        var resultingCreep = role.spawnMissionCreep(spawn, request);
+        if (!resultingCreep) return false;
+        resultingCreep.memory.home = this._room.memory.base.name;
+        if (entry.provider && typeof entry.provider.onSpawn === 'function') {
+            entry.provider.onSpawn(request, resultingCreep);
+        }
+        if (spawn.memory.debug) {
+            info.log(role.symbol + ' Spawning mission ' + role.roleName + ' (' + resultingCreep.body.length + 'p)', this._room);
+        }
+        return resultingCreep;
     }
 
     _warnAboutRecovery() {
@@ -265,5 +337,15 @@ class BaseManager {
         return this._defaultRole;
     }
 }
+
+BaseManager._missionSpawnProviders = new Map();
+BaseManager.registerMissionSpawnProvider('remote', {
+	getSpawnRequests: function (baseName, room) {
+		return require('./manager.remote').getSpawnRequests(baseName, room);
+	},
+	onSpawn: function (request, creep) {
+		require('./manager.remote').onSpawn(request, creep);
+	},
+});
 
 module.exports = BaseManager;

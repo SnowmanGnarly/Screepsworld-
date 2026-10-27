@@ -48,6 +48,15 @@ class RolePrototype {
 		return this._spawnCreepWithParts(spawn, [WORK, CARRY, MOVE, MOVE]);
 	}
 
+	spawnMissionCreep(spawn, request) {
+		var body = request && (request.exactBody || request.body);
+		var memory = Object.assign({}, request && request.memory, {
+			role: request && request.role || this.roleName,
+			home: request && request.home || spawn.memory.home,
+		});
+		return this._spawnCreepWithBody(spawn, body, memory);
+	}
+
 	/*
 	 * Return true if a creep with this role would have work to do, i.e. if the
 	 * role is currently _really_ necessary.
@@ -212,6 +221,25 @@ class RolePrototype {
 			info.log(this.symbol + ' ' + MainUtil.getDisplayName(creep) + ' could not move: ' + moveResult, this._baseRoom);
 		}
 		return moveResult;
+	}
+
+	_moveToRoom(creep, destination, x = 25, y = 25) {
+		var roomName = typeof destination === 'string' ? destination : destination && destination.roomName;
+		if (!roomName) return false;
+		if (destination && typeof destination === 'object') {
+			x = destination.x;
+			y = destination.y;
+		}
+		x = Number.isFinite(x) ? Math.max(0, Math.min(49, x)) : 25;
+		y = Number.isFinite(y) ? Math.max(0, Math.min(49, y)) : 25;
+		creep.memory.destination = { roomName: roomName, x: x, y: y };
+		if (creep.room.name === roomName) return true;
+		this._moveToLocation(creep, new RoomPosition(x, y, roomName));
+		return false;
+	}
+
+	_travelToRoom(creep, destination, x = 25, y = 25) {
+		return this._moveToRoom(creep, destination, x, y);
 	}
 
 	/*
@@ -683,6 +711,26 @@ class RolePrototype {
 			if (spawn.memory.debug) {
 				info.log(message, spawn.room);
 			}
+		} else {
+			info.error(message, spawn.room);
+		}
+		return false;
+	}
+
+	_spawnCreepWithBody(spawn, body, memory) {
+		if (!Array.isArray(body) || body.length === 0 || body.length > 50) return false;
+		var cost = this._calculateCostsForParts(body);
+		if (!Number.isFinite(cost) || cost > spawn.room.energyAvailable) return false;
+		body = body.slice();
+		var newName = this._createCreepName(spawn);
+		var spawnResult = spawn.spawnCreep(body, newName, { memory: memory });
+		if (spawnResult == OK) {
+			MainCache.recordSpawn(Game.creeps[newName], spawn);
+			return Game.creeps[newName];
+		}
+		var message = 'Could not spawn ' + this.roleName + ' ' + newName + ' (' + body.length + ' parts, ' + cost + ' energy): ' + spawnResult;
+		if (spawnResult == ERR_NOT_ENOUGH_ENERGY || spawnResult == ERR_BUSY) {
+			if (spawn.memory.debug) info.log(message, spawn.room);
 		} else {
 			info.error(message, spawn.room);
 		}

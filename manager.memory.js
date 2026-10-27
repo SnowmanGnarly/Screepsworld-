@@ -6,6 +6,7 @@
 
 var MainUtil = require('./main.util');
 var info = require('./main.info');
+var IntelManager = require('./manager.intel');
 
 class MemoryManager {
 
@@ -199,6 +200,8 @@ class MemoryManager {
 				}
 			}
 		}
+		IntelManager.ensureMemory();
+		IntelManager.cleanup();
 	}
 
 };

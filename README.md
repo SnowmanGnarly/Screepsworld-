@@ -14,7 +14,7 @@ Each tick, `module.exports.loop` in `main.js` proceeds in this order:
 
 1. Instantiate and prioritize all roles through `BaseManager.fetchAllRoles()`.
 2. Initialize CPU tracking, persistent memory/role information, and the per-tick `MainCache`.
-3. Run defense assessment and the centralized logistics manager.
+3. Observe intel, plan remote missions, run defense, plan terminal transfers, run opt-in market work when CPU permits, and then run centralized logistics.
 4. Run base spawning and creep behavior, then towers and links.
 5. If CPU allows (degraded mode off), update road heatmaps, run the Mayor planner, and draw informational/CPU visuals.
 
@@ -34,9 +34,13 @@ Decentralized creep roles are coordinated by centralized per-room managers. Role
 
 | File | Responsibility |
 | --- | --- |
-| `manager.base.js` | Role registry, spawn priority and quotas, emergency Harvester recovery, Miner replacement, outsourced spawning, and creep dispatch. |
-| `manager.memory.js` | Initializes base/spawn/role memory, removes dead-creep and stale visible-structure memory, samples `RawMemory` size. |
+| `manager.base.js` | Role registry, quotas, recovery, Miner replacement, declarative mission spawn providers, outsourced spawning, and creep dispatch. |
+| `manager.memory.js` | Initializes base/spawn/role and empire memory, removes dead-creep and stale visible-structure memory, samples `RawMemory` size. |
+| `manager.intel.js` | Bounded, versioned `Memory.empire` with normalized intel, missions, squads, and reserved alliance storage. |
+| `manager.remote.js` | Explicit outpost configuration, route demand/ROI, suspension/blacklist metadata, mission spawning, and capped construction. |
 | `manager.logistics.js` | Persistent per-room task queue, request generation, endpoint refresh, claims, partial-delivery reconciliation, and dynamic hauler demand. |
+| `manager.terminal.js` | Reusable resource requests, owned-room balancing, reserve/fee accounting, cooldown-safe sends, and terminal positioning. |
+| `manager.market.js` | Opt-in existing-order trades with price/credit/fee limits, deal caps, failure backoff, and bounded history. |
 | `logistics.runner.js` | Executes a claimed task for Storekeepers/Couriers: pickup, delivery, retry backoff, and foreign-resource recovery. |
 | `manager.defense.js` | Hostile body scoring, target selection, defender requests, rate-limited notifications, and last-resort safe mode. |
 | `manager.tower.js` | Executes the shared tower attack plan; otherwise heals creeps and performs emergency repairs within energy reserves. |
@@ -56,7 +60,7 @@ Decentralized creep roles are coordinated by centralized per-room managers. Role
 
 ### Creep roles
 
-All roles extend `RolePrototype` and are registered in `BaseManager.fetchAllRoles()`. Role names in creep memory are `Harvester`, `Defender`, `Builder`, `Upgrader`, `Handyman`, `Explorer`, `Miner`, `Storekeeper`, and `Courier`.
+All roles extend `RolePrototype` and are registered in `BaseManager.fetchAllRoles()`. Role names in creep memory are `Harvester`, `Defender`, `Builder`, `Upgrader`, `Handyman`, `Explorer`, `Miner`, `Storekeeper`, `Courier`, `Scout`, `Reserver`, `RemoteMiner`, and `RemoteHauler`.
 
 | File | Behavior |
 | --- | --- |
@@ -69,6 +73,10 @@ All roles extend `RolePrototype` and are registered in `BaseManager.fetchAllRole
 | `role.handyman.js` | Repairs roads/containers and levels walls/ramparts; can fall back to building. |
 | `role.defender.js` | On-demand melee, ranged, or healing response; recycles itself when the threat ends. |
 | `role.explorer.js` | Moves to an expansion flag, claims the controller, creates/builds a spawn, then becomes a local Harvester. |
+| `role.scout.js` | Refreshes outpost intel using persisted-coordinate travel. |
+| `role.reserver.js` | Reserves neutral controllers and rejects hostile ownership/reservations. |
+| `role.remoteMiner.js` | Mines, builds nearby outpost sites, and delivers or drops energy. |
+| `role.remoteHauler.js` | Returns remote energy to home storage/terminal and recovers foreign cargo. |
 
 ---
 
@@ -88,8 +96,28 @@ Room-wide threat assessment replaces uncoordinated single-tower logic:
 - Throttles `Game.notify()` alerts to prevent inbox flooding.
 - Emergency safe mode triggering as a last resort.
 
-### 4. RAS & CPU Degradation (`manager.cpu.js`)
-`manager.cpu.js` enters degraded mode when `Game.cpu.bucket < 1000` and leaves it when the bucket is `> 1500` (hysteresis). Road watching, Mayor work, and visuals are deferred in degraded mode; memory setup, defense, logistics, spawning, creep execution, towers, and links keep running.
+### 4. Phase 2A Remote Outposts (`manager.intel.js` + `manager.remote.js`)
+Remote operations are opt-in through `room.memory.base.remoteRooms` (room names or configuration objects) or `Remote`, `Remote:<target>`, and `Remote:<home>:<target>` flags. Distance defaults to one room. Missions use bounded intel, exact-body spawn requests, source/output-based hauling demand, ROI and suspension metadata, neutral container/road sites, and defensive outpost response without safe mode.
+
+### 5. Phase 2B Terminal & Market (`manager.terminal.js` + `manager.market.js`)
+Owned terminals balance per-resource stock with hysteresis, deterministic batches, emergency reserves, exact transaction-fee accounting, and cooldown checks. Later managers can call `TerminalManager.requestResource(homeRoomOrBase, resourceType, amount, options)` or `requestTransfer()` with a target, priority, reason, and expiry; requests live in bounded `Memory.empire.resourceRequests`. Local storage/terminal movement uses existing logistics tasks, with manual stock rules taking precedence.
+
+Market trading is disabled by default and uses existing orders only. Enable it explicitly per room and resource, for example:
+
+```javascript
+room.memory.market = {
+    enabled: true,
+    sell: true,
+    resources: {
+        energy: { sell: true, min: 20000, target: 50000, max: 100000, minSellPrice: 1.5 }
+    }
+};
+```
+
+Buy/sell thresholds, batch/cooldown/deal limits, price/credit limits, fee profitability, failure backoff, and bounded history are enforced. Public order creation is not implemented.
+
+### 6. RAS & CPU Degradation (`manager.cpu.js`)
+`manager.cpu.js` enters degraded mode when `Game.cpu.bucket < 1000` and leaves it when the bucket is `> 1500` (hysteresis). Remote construction, market order scanning, road watching, Mayor work, and visuals are deferred in degraded mode; memory setup, intel, remote spawn planning, defense, terminal planning, logistics, spawning, creep execution, towers, and links keep running.
 
 ---
 
@@ -113,6 +141,8 @@ There is no compile, lint, format, watch, or upload script — the root `.js` fi
 | `test/defense.regression.test.js` | Safe mode, target validation, alerts, tower decisions, defender behavior. |
 | `test/planner.regression.test.js` | RCL placement, slots, link roles, layout performance, occupied construction positions. |
 | `test/reliability.regression.test.js` | CPU hysteresis, memory measurement, recovery, spawning, shared role behavior. |
+| `test/remote.regression.test.js` | Empire bounds, reservation, remote economy, demand/ROI, construction, defense, and mission spawning. |
+| `test/economy.regression.test.js` | Requests, terminal reserves/fees, balancing, stock policies, market orders, limits, and retries. |
 | `test/syntax.test.js` | `node --check` on every root-level `.js` file. |
 
 Tests use the local mocks in `test/helpers/screeps.js` (`resetScreeps`, `makeRoom`, `makeStructure`, `makeCreep`, `makeSpawn`, `makeStore`, `setFind`, `registerObject`); they do not connect to a Screeps server. Note that `logistics.runner.js` uses `// @ts-check` with JSDoc types — keep those annotations valid.
@@ -125,7 +155,7 @@ No automated deployment process or CI exists in this repository. Deployment to a
 
 ## 📋 Roadmap
 
-For the full phased architectural roadmap and implementation tracker, see [TODO.md](./TODO.md). Remote mining, labs, market, factory, observer/power, and offensive warfare systems are planned or backlog items — placing or hauling for those structures is not full automation.
+For the full phased architectural roadmap and implementation tracker, see [TODO.md](./TODO.md). Phase 2A remote outposts and Phase 2B terminal/market behavior are implemented; labs, factory, observer/power, and offensive warfare systems remain planned or backlog items.
 
 ---
 

@@ -13,6 +13,11 @@ var LinkManager = require('./manager.link');
 var LogisticsManager = require('./manager.logistics');
 var MayorManager = require('./manager.mayor');
 var MemoryManager = require('./manager.memory');
+var IntelManager = require('./manager.intel');
+var RemoteManager = require('./manager.remote');
+var FactoryManager = require('./manager.factory');
+var TerminalManager = require('./manager.terminal');
+var MarketManager = require('./manager.market');
 var RoadManager = require('./manager.road');
 var RoomManager = require('./manager.room');
 var TowerManager = require('./manager.tower');
@@ -31,9 +36,14 @@ module.exports.loop = function () {
     CpuManager.measure('initRound()', () => MemoryManager.initRound(allRoles));
     MainCache.initRound(allRoles);
 
-    // run defense and centralized logistics bus first
+    // run cheap empire planning, defense, and centralized logistics first
 
-    CpuManager.measure('DefenseManager', DefenseManager.runAll);
+    CpuManager.measure('IntelManager', () => IntelManager.runAll());
+    CpuManager.measure('RemoteManager', () => RemoteManager.runAll(CpuManager.shouldRunDeferred()));
+    CpuManager.measure('DefenseManager', () => DefenseManager.runAll());
+    CpuManager.measure('FactoryManager', () => FactoryManager.runAll());
+    CpuManager.measure('TerminalManager', () => TerminalManager.runAll());
+    CpuManager.measure('MarketManager', () => MarketManager.runAll(CpuManager.shouldRunDeferred()));
     CpuManager.measure('LogisticsManager', LogisticsManager.runAll);
 
     // run the entire base
