@@ -54,11 +54,11 @@ Although most files have `checkJs` disabled globally, `logistics.runner.js` opts
 
 1. Instantiate and prioritize all roles through `BaseManager.fetchAllRoles()`.
 2. Initialize CPU tracking, persistent memory/role information, and the per-tick `MainCache`.
-3. Observe intel, plan remote missions, run defense, plan terminal transfers, run opt-in market work when CPU permits, then run centralized logistics.
+3. Observe intel, plan remote missions, run defense, run factory production goals, plan terminal transfers, run opt-in market work when CPU permits, then run centralized logistics.
 4. Run base spawning and creep behavior, then towers and links.
 5. If deferred work is allowed, update road heatmaps, run the Mayor planner, and draw informational/CPU visuals.
 
-`manager.cpu.js` enters degraded mode when `Game.cpu.bucket < 1000` and leaves it when the bucket is `> 1500`. The separate thresholds provide hysteresis. Remote construction, market order scanning, road watching, Mayor work, and visuals are deferred in degraded mode; memory setup, intel, remote spawn planning, defense, terminal planning, logistics, spawning, creep execution, towers, and links continue.
+`manager.cpu.js` enters degraded mode when `Game.cpu.bucket < 1000` and leaves it when the bucket is `> 1500`. The separate thresholds provide hysteresis. Remote construction, market order scanning, road watching, Mayor work, and visuals are deferred in degraded mode; memory setup, intel, remote spawn planning, defense, factory production, terminal planning, logistics, spawning, creep execution, towers, and links continue. Factories are intentionally engineered to keep planning and producing in degraded mode rather than waiting for bucket recovery.
 
 ### Core and manager modules
 
@@ -73,6 +73,7 @@ Although most files have `checkJs` disabled globally, `logistics.runner.js` opts
 | `manager.memory.js` | Initializes base/spawn/role and empire memory, removes dead-creep and stale visible-structure memory, and samples `RawMemory` size every 100 ticks. |
 | `manager.intel.js` | Normalizes bounded, versioned `Memory.empire` observations; expires stale intel while preserving active offscreen missions. |
 | `manager.remote.js` | Plans explicit remote missions, bounded route demand and ROI, exact spawn requests, suspension/blacklist metadata, and remote sites. |
+| `manager.factory.js` | Plans bounded goal-driven factory chains, recursive component imports, battery compression, cancellation, local logistics, and energy-reserve protection. |
 | `manager.logistics.js` | Persistent per-room task queue, request generation, endpoint refresh, claims, partial-delivery reconciliation, and dynamic hauler demand. |
 | `manager.terminal.js` | Bounded cross-room resource requests, owned-room balancing, reserve/fee accounting, cooldown-safe sends, and terminal stock positioning. |
 | `manager.market.js` | Explicitly enabled existing-order buying/selling with price/credit/fee limits, deal caps, failure backoff, and bounded history. |
@@ -167,6 +168,7 @@ Tests are local Mocha tests using Node assertions; they do not connect to a Scre
 - `test/reliability.regression.test.js`: CPU hysteresis, memory measurement, recovery, spawning, and shared role behavior.
 - `test/remote.regression.test.js`: empire bounds, remote configuration, reservation, travel, economy, ROI, construction, defense, and mission spawning.
 - `test/economy.regression.test.js`: resource requests, terminal reserves/fees/cooldowns, balancing, logistics policies, market orders, credits, deal caps, and retries.
+- `test/factory.regression.test.js`: recursive production goals, component requests, factory logistics, cancellation, reserve protection, and multi-room chains.
 - `test/syntax.test.js`: syntax-checks every root-level `.js` file.
 
 Use `test/helpers/screeps.js` for new tests. Call `resetScreeps()` before each case, normally in `beforeEach`, to install globals and reset `Game`, `Memory`, and `MainCache`. Build rooms/objects with `makeRoom`, `makeStructure`, `makeCreep`, `makeSpawn`, and `makeStore`; populate `room.find` results with `setFind`; and call `registerObject` for anything that must be reachable through `Game.getObjectById`.

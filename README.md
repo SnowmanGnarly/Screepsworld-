@@ -14,7 +14,7 @@ Each tick, `module.exports.loop` in `main.js` proceeds in this order:
 
 1. Instantiate and prioritize all roles through `BaseManager.fetchAllRoles()`.
 2. Initialize CPU tracking, persistent memory/role information, and the per-tick `MainCache`.
-3. Observe intel, plan remote missions, run defense, plan terminal transfers, run opt-in market work when CPU permits, and then run centralized logistics.
+3. Observe intel, plan remote missions, run defense, run factory production goals, plan terminal transfers, run opt-in market work when CPU permits, and then run centralized logistics.
 4. Run base spawning and creep behavior, then towers and links.
 5. If CPU allows (degraded mode off), update road heatmaps, run the Mayor planner, and draw informational/CPU visuals.
 
@@ -38,6 +38,7 @@ Decentralized creep roles are coordinated by centralized per-room managers. Role
 | `manager.memory.js` | Initializes base/spawn/role and empire memory, removes dead-creep and stale visible-structure memory, samples `RawMemory` size. |
 | `manager.intel.js` | Bounded, versioned `Memory.empire` with normalized intel, missions, squads, and reserved alliance storage. |
 | `manager.remote.js` | Explicit outpost configuration, route demand/ROI, suspension/blacklist metadata, mission spawning, and capped construction. |
+| `manager.factory.js` | Goal-driven factory chains with recursive component imports, battery compression, cancellation, local logistics, and energy-reserve protection. |
 | `manager.logistics.js` | Persistent per-room task queue, request generation, endpoint refresh, claims, partial-delivery reconciliation, and dynamic hauler demand. |
 | `manager.terminal.js` | Reusable resource requests, owned-room balancing, reserve/fee accounting, cooldown-safe sends, and terminal positioning. |
 | `manager.market.js` | Opt-in existing-order trades with price/credit/fee limits, deal caps, failure backoff, and bounded history. |
@@ -116,8 +117,22 @@ room.memory.market = {
 
 Buy/sell thresholds, batch/cooldown/deal limits, price/credit limits, fee profitability, failure backoff, and bounded history are enforced. Public order creation is not implemented.
 
-### 6. RAS & CPU Degradation (`manager.cpu.js`)
-`manager.cpu.js` enters degraded mode when `Game.cpu.bucket < 1000` and leaves it when the bucket is `> 1500` (hysteresis). Remote construction, market order scanning, road watching, Mayor work, and visuals are deferred in degraded mode; memory setup, intel, remote spawn planning, defense, terminal planning, logistics, spawning, creep execution, towers, and links keep running.
+### 6. Phase 2C Goal-Driven Factories (`manager.factory.js`)
+Factories implement recursive production goals, request missing components through terminal resource requests, move inputs and outputs through centralized logistics, compress energy into batteries, support explicit cancellation, and protect emergency energy reserves. Factory planning and production intentionally continue in degraded CPU mode.
+
+Factories have no work by default: `goals` is empty and `batteryTarget` is `0`. Configure target stocks and/or a battery target explicitly per room:
+
+```javascript
+room.memory.factory = {
+    enabled: true,
+    goals: { composite: 5000, oxidant: 1000 },
+    batteryTarget: 10000,
+    batchSize: 1000
+};
+```
+
+### 7. RAS & CPU Degradation (`manager.cpu.js`)
+`manager.cpu.js` enters degraded mode when `Game.cpu.bucket < 1000` and leaves it when the bucket is `> 1500` (hysteresis). Remote construction, market order scanning, road watching, Mayor work, and visuals are deferred in degraded mode; memory setup, intel, remote spawn planning, defense, factory production, terminal planning, logistics, spawning, creep execution, towers, and links keep running.
 
 ---
 
@@ -143,6 +158,7 @@ There is no compile, lint, format, watch, or upload script — the root `.js` fi
 | `test/reliability.regression.test.js` | CPU hysteresis, memory measurement, recovery, spawning, shared role behavior. |
 | `test/remote.regression.test.js` | Empire bounds, reservation, remote economy, demand/ROI, construction, defense, and mission spawning. |
 | `test/economy.regression.test.js` | Requests, terminal reserves/fees, balancing, stock policies, market orders, limits, and retries. |
+| `test/factory.regression.test.js` | Recursive factory goals, component requests, logistics, cancellation, reserve protection, and multi-room chains. |
 | `test/syntax.test.js` | `node --check` on every root-level `.js` file. |
 
 Tests use the local mocks in `test/helpers/screeps.js` (`resetScreeps`, `makeRoom`, `makeStructure`, `makeCreep`, `makeSpawn`, `makeStore`, `setFind`, `registerObject`); they do not connect to a Screeps server. Note that `logistics.runner.js` uses `// @ts-check` with JSDoc types — keep those annotations valid.
@@ -155,7 +171,7 @@ No automated deployment process or CI exists in this repository. Deployment to a
 
 ## 📋 Roadmap
 
-For the full phased architectural roadmap and implementation tracker, see [TODO.md](./TODO.md). Phase 2A remote outposts and Phase 2B terminal/market behavior are implemented; labs, factory, observer/power, and offensive warfare systems remain planned or backlog items.
+For the full phased architectural roadmap and implementation tracker, see [TODO.md](./TODO.md). Phase 2A remote outposts, Phase 2B terminal/market behavior, and Phase 2C goal-driven factory chains are implemented. Mineral harvesting, lab reactions and boosts, deposit harvesting, observer/power, and offensive warfare systems remain planned or backlog items.
 
 ---
 

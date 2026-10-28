@@ -14,10 +14,11 @@
 | **P1** | **RCL-Aware Construction Planner** | ✅ **Implemented** | Automated RCL 3–8 structure unlocking & intelligent placement in `manager.room.js` & `manager.mayor.js`. |
 | **P1** | **Defense Manager & Invasion Response** | ✅ **Implemented** | Threat assessment, coordinated tower focus fire, rate-limited notifications, on-demand defenders (`manager.defense.js`). |
 | **P1** | **RAS & Memory Optimization** | ✅ **Implemented** | Fixed 2,500-cell serialization bottleneck in `tile.watcher.js`, defensive `roleInfo` handling in `manager.base.js`. |
-| **P2** | **Remote Mining & Reservation** | ⏳ **Planned** | Scouts, reservers, remote miners/haulers, net ROI profitability modeling (`manager.remote.js`). |
+| **P2A** | **Remote Mining & Reservation** | ✅ **Implemented** | Scouts, reservers, remote miners/haulers, bounded missions, construction, and net ROI profitability modeling (`manager.remote.js`). |
 | **P2** | **Mineral Mining, Labs & Boosts (RCL 6)** | ⏳ **Planned** | Automated extractor harvesting, 3-lab & 10-lab reaction pipelines, creep combat boosting (`manager.lab.js`). |
-| **P2** | **Terminal & Market Automation (RCL 6)** | ⏳ **Planned** | Inter-room energy balancing, terminal pricing, order fee preservation (`manager.market.js`). |
-| **P3** | **Deposit Harvesting & Factories (RCL 7)** | 📋 **Backlog** | Highway commodity harvesting, cooldown decay tracking, resource compression (`manager.factory.js`). |
+| **P2B** | **Terminal & Market Automation (RCL 6)** | ✅ **Implemented** | Configurable inter-room balancing, existing-order trading, reserves, and exact fee accounting (`manager.terminal.js`, `manager.market.js`). |
+| **P2C** | **Goal-Driven Factory Chains (RCL 7)** | ✅ **Implemented** | Recursive production goals, component imports, battery compression, cancellation, and reserve protection (`manager.factory.js`). |
+| **P3** | **Deposit Harvesting (RCL 7)** | 📋 **Backlog** | Highway deposit scouting and harvesting with cooldown decay tracking. |
 | **P3** | **Observer & Power Automation (RCL 8)** | 📋 **Backlog** | Radar room scanning, Power Bank 50% damage reflection squads, Operator Power Creep automation. |
 | **P3** | **Stronghold Raids & Offensive Warfare** | 📋 **Backlog** | Late-game automated NPC stronghold destruction, squad coordination, and treasury looting. |
 
@@ -84,52 +85,61 @@
 ---
 
 ### 4. Remote Mining & Controller Reservation
-- [ ] Create `role.scout.js` for lightweight room scouting and intel gathering.
-- [ ] Create `role.reserver.js` with `[CLAIM, MOVE]` parts to reserve neutral rooms (restoring source output to 3000 energy / 300 ticks).
-- [ ] Create `role.remoteMiner.js` ($5 \times \text{WORK}$) stationed directly on remote source containers.
-- [ ] Create `role.remoteHauler.js` ($2 \times \text{CARRY} : 1 \times \text{MOVE}$) running regular routes between remote containers and home storage.
-- [ ] Implement `manager.remote.js` to compute Net ROI:
+- [x] Create `role.scout.js` for lightweight room scouting and intel gathering.
+- [x] Create `role.reserver.js` with `[CLAIM, MOVE]` parts to reserve neutral rooms (restoring source output to 3000 energy / 300 ticks).
+- [x] Create `role.remoteMiner.js` with mission-sized bodies for mining near remote source containers.
+- [x] Create `role.remoteHauler.js` with demand-sized bodies for routes between remote containers and home storage.
+- [x] Implement `manager.remote.js` to compute bounded Net ROI:
   $$\Delta E = E_{\text{harvested}} - (E_{\text{miner}} + E_{\text{hauler}} + E_{\text{reserver}} + E_{\text{repairs}} + E_{\text{defense}})$$
-  Automatically abandon or blacklist rooms with active invader cores or player harassment.
+  Automatically suspend or blacklist rooms with sustained losses, active invader cores, or player harassment.
+- [x] Plan bounded remote construction and exact mission spawns, with coverage in `test/remote.regression.test.js`.
 
 ---
 
 ### 5. Mineral Mining, Lab Reactions & Boosts — RCL 6
-- [ ] Create `role.mineralMiner.js` and `manager.mineral.js`:
-  - [ ] Harvest room mineral deposit until exhausted or storage full.
-  - [ ] Obey extractor cooldown ($5$ ticks).
+- [ ] Create `role.miner.mineral.js` and `manager.mineral.js`:
+  - [ ] Harvest room mineral deposits at RCL 6+ through built Extractors when storage/terminal capacity permits.
+  - [ ] Obey extractor cooldown and mineral regeneration timing.
 - [ ] Create `manager.lab.js`:
-  - [ ] Designate 2 supply reagent labs and up to 8 production labs within range 2.
-  - [ ] Implement reaction recipe tree (e.g., $U + H \rightarrow UH$, $UH + O \rightarrow UHO_2$).
-  - [ ] Integrate with `manager.logistics.js` to load reagents and extract products.
-- [ ] Implement creep boost module: boost upgraders with `GH2O`/`XGH2O` and defenders with `XUH2O`/`XZHO2`.
+  - [ ] Dynamically designate 2 supply reagent labs and up to 8 production labs within range 2.
+  - [ ] Implement ordered base/T1/T2/T3 reaction chains driven by terminal inventory and strategic reserves.
+  - [ ] Integrate with `manager.logistics.js` to load energy/reagents and extract products.
+- [ ] Implement creep boost requests for spawning creeps when labs contain the required compounds and energy.
 
 ---
 
 ### 6. Terminal & Market Automation — RCL 6
-- [ ] Create `manager.terminal.js`:
-  - [ ] Inter-room energy balancing: transfer excess energy ($> 100\text{k}$) from high-RCL bases to developing bases ($< 30\text{k}$).
-  - [ ] Calculate transfer energy cost: $\lceil \text{amount} \times (1 - e^{-\text{distance} / 30}) \rceil$.
-- [ ] Create `manager.market.js`:
-  - [ ] Sell surplus minerals and commodities to highest bidding buy orders via `Game.market.deal()`.
-  - [ ] Buy necessary lab reagents when stockpiles drop below threshold.
-  - [ ] Avoid creating public orders frequently to avoid wasting the 5% credit fee.
-  - [ ] Enforce minimum emergency energy reserve ($50\text{k}$).
+- [x] Create `manager.terminal.js`:
+  - [x] Balance owned rooms with configurable per-resource thresholds and hysteresis; energy defaults to $10\text{k}$ minimum, $20\text{k}$ target, and $50\text{k}$ maximum.
+  - [x] Calculate transfer energy cost: $\lceil \text{amount} \times (1 - e^{-\text{distance} / 30}) \rceil$.
+  - [x] Provide bounded reusable resource requests, exact fee accounting, cooldown-safe sends, and terminal stock positioning.
+- [x] Create `manager.market.js`:
+  - [x] Sell surplus configured resources through the best net eligible existing buy orders via `Game.market.deal()`.
+  - [x] Buy configured resources, including lab reagents, when stockpiles drop below threshold.
+  - [x] Use existing orders only; public order creation remains disabled and unimplemented.
+  - [x] Enforce a configurable emergency energy reserve ($50\text{k}$ by default).
+- [x] Cover requests, reserves, fees, balancing, stock policies, order limits, and retries in `test/economy.regression.test.js`.
 
 ---
 
-### 7. Deposit Harvesting & Factories — RCL 7
+### 7. Goal-Driven Factory Chains — RCL 7 (Phase 2C)
+- [x] Create `manager.factory.js`:
+  - [x] Produce configured commodity targets through bounded recursive dependency chains.
+  - [x] Request missing components through terminal transfers and move factory inputs/outputs through logistics.
+  - [x] Compress raw energy into batteries without spending emergency reserves.
+  - [x] Support partial batches, explicit cancellation, goal cleanup, and multi-room chains.
+- [x] Cover production planning, logistics, cancellation, reserves, and cross-room requests in `test/factory.regression.test.js`.
+
+---
+
+### 8. Deposit Harvesting — RCL 7 (Backlog)
 - [ ] Create `role.depositMiner.js`:
   - [ ] Scout highway rooms for metal, silicon, biomass, and mist.
   - [ ] Track increasing harvest cooldown; retire miners when cooldown $> 100$ ticks.
-- [ ] Create `manager.factory.js`:
-  - [ ] Produce basic commodities automatically.
-  - [ ] Compress raw energy into batteries for high-density storage.
-  - [ ] Feed commodities into terminal trading pipeline.
 
 ---
 
-### 8. Observer Intelligence & Power Automation — RCL 8
+### 9. Observer Intelligence & Power Automation — RCL 8
 - [ ] Create `manager.observer.js`:
   - [ ] Scan radar rooms sequentially (1 tick delay) for power banks, highway deposits, and player threats.
 - [ ] Form Power Bank hunting squads:
@@ -141,7 +151,7 @@
 
 ---
 
-### 9. Stronghold Raids & Offensive Warfare — Late Game
+### 10. Stronghold Raids & Offensive Warfare — Late Game
 - [ ] Detect NPC Invader Strongholds and assess difficulty levels (Core Level 1–5).
 - [ ] Coordinated dismantler and ranged attack assault squads.
 - [ ] Full-resource ruin collection and loot hauling back to terminal.
@@ -152,9 +162,9 @@
 ## 🛡️ Reliability, Availability & Scalability (RAS) Guarantees
 
 1. **CPU Throttling**:
-   - If `Game.cpu.bucket < 1000`, non-essential subsystems (visuals, road heatmaps, construction planning) sleep, prioritizing spawns, towers, and defense.
+   - If `Game.cpu.bucket < 1000`, non-essential subsystems (visuals, road heatmaps, construction planning) sleep while factory production, terminal/logistics work, spawning, towers, and defense continue.
 2. **Memory Safety**:
-   - Memory usage kept strictly under 1 MB (well below the 2 MB hard engine limit).
+   - Serialized memory is sampled every 100 ticks through `RawMemory`; warnings above 1.5 MB are rate-limited rather than enforcing a hard 1 MB limit.
    - Eliminated synchronous 2,500-cell array serializations in `tile.watcher.js`.
 3. **Fault-Tolerant Spawning**:
    - Spawning logic isolated in `BaseManager`.
