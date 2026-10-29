@@ -15,7 +15,7 @@
 | **P1** | **Defense Manager & Invasion Response** | ✅ **Implemented** | Threat assessment, coordinated tower focus fire, rate-limited notifications, on-demand defenders (`manager.defense.js`). |
 | **P1** | **RAS & Memory Optimization** | ✅ **Implemented** | Fixed 2,500-cell serialization bottleneck in `tile.watcher.js`, defensive `roleInfo` handling in `manager.base.js`. |
 | **P2A** | **Remote Mining & Reservation** | ✅ **Implemented** | Scouts, reservers, remote miners/haulers, bounded missions, construction, and net ROI profitability modeling (`manager.remote.js`). |
-| **P2** | **Mineral Mining, Labs & Boosts (RCL 6)** | ⏳ **Planned** | Automated extractor harvesting, 3-lab & 10-lab reaction pipelines, creep combat boosting (`manager.lab.js`). |
+| **P2** | **Mineral Mining, Labs & Boosts (RCL 6)** | ✅ **Implemented** | Automatic capped extractor harvesting, dynamic 3-lab & 10-lab reaction pipelines, exact lab logistics, and opt-in spawn boosts (`manager.mineral.js`, `manager.lab.js`). |
 | **P2B** | **Terminal & Market Automation (RCL 6)** | ✅ **Implemented** | Configurable inter-room balancing, existing-order trading, reserves, and exact fee accounting (`manager.terminal.js`, `manager.market.js`). |
 | **P2C** | **Goal-Driven Factory Chains (RCL 7)** | ✅ **Implemented** | Recursive production goals, component imports, battery compression, cancellation, and reserve protection (`manager.factory.js`). |
 | **P3** | **Deposit Harvesting (RCL 7)** | 📋 **Backlog** | Highway deposit scouting and harvesting with cooldown decay tracking. |
@@ -97,14 +97,15 @@
 ---
 
 ### 5. Mineral Mining, Lab Reactions & Boosts — RCL 6
-- [ ] Create `role.miner.mineral.js` and `manager.mineral.js`:
-  - [ ] Harvest room mineral deposits at RCL 6+ through built Extractors when storage/terminal capacity permits.
-  - [ ] Obey extractor cooldown and mineral regeneration timing.
-- [ ] Create `manager.lab.js`:
-  - [ ] Dynamically designate 2 supply reagent labs and up to 8 production labs within range 2.
-  - [ ] Implement ordered base/T1/T2/T3 reaction chains driven by terminal inventory and strategic reserves.
-  - [ ] Integrate with `manager.logistics.js` to load energy/reagents and extract products.
-- [ ] Implement creep boost requests for spawning creeps when labs contain the required compounds and energy.
+- [x] Create `role.miner.mineral.js` and `manager.mineral.js`:
+  - [x] Harvest room mineral deposits at RCL 6+ through built Extractors when storage/terminal capacity permits.
+  - [x] Obey extractor cooldown and mineral regeneration timing, with automatic demand capped at one miner by default.
+- [x] Create `manager.lab.js`:
+  - [x] Dynamically designate 2 supply reagent labs and up to 8 production labs within range 2.
+  - [x] Implement bounded ordered base/T1/T2/T3 reaction chains driven by storage/terminal/lab inventory and strategic reserves.
+  - [x] Integrate with `manager.logistics.js` for exact energy/reagent loading, product collection, and drain-before-reassignment.
+- [x] Implement opt-in boost requests with stocked-lab preflight, resource reservations, post-spawn boosting, cleanup, and emergency recovery bypass.
+- [x] Cover mineral harvesting in `test/mineral.regression.test.js`, reactions/logistics in `test/lab.regression.test.js`, and boosts in `test/boost.regression.test.js`.
 
 ---
 

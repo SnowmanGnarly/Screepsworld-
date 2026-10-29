@@ -7,8 +7,6 @@ var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
 var info = require('./main.info');
 
-var MemoryManager = require('./manager.memory');
-
 const TYPE_TARGET = constants.LINK_TYPE_TARGET;
 const TYPE_SOURCE = constants.LINK_TYPE_SOURCE;
 

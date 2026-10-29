@@ -5,7 +5,6 @@
  */
  
 var MainUtil = require('./main.util');
-var constants = require('./main.constants');
 var info = require('./main.info');
 
 var Harvester = require('./role.harvester');
@@ -15,6 +14,7 @@ var Upgrader = require('./role.upgrader');
 var Handman = require('./role.handyman');
 var Explorer = require('./role.explorer');
 var Miner = require('./role.miner');
+var MineralMiner = require('./role.miner.mineral');
 var StoreKeeper = require('./role.storekeeper');
 var Defender = require('./role.defender');
 var Scout = require('./role.scout');
@@ -25,6 +25,8 @@ var RemoteHauler = require('./role.remoteHauler');
 var MemoryManager = require('./manager.memory');
 var MainCache = require('./main.cache');
 var LogisticsManager = require('./manager.logistics');
+var MineralManager = require('./manager.mineral');
+var LabManager = require('./manager.lab');
 
 class BaseManager {
 	
@@ -41,6 +43,7 @@ class BaseManager {
 	    	new Handman(), 
 	    	new Explorer(), 
 	    	new Miner(),
+		    new MineralMiner(),
 	    	new StoreKeeper(),
 	    	new Courier(),
 		    new Scout(),
@@ -123,6 +126,12 @@ class BaseManager {
                 var maxNumber = roleConfig.maxNumber === undefined ? (role.roleName == 'Storekeeper' ? 2 : 1) : roleConfig.maxNumber;
                 var desiredNumber = LogisticsManager.getDesiredWorkerCount(this._room, role.roleName);
                 requiredNumber = Math.max(requiredNumber, Math.min(desiredNumber, maxNumber));
+            }
+            if (role.roleName == 'MineralMiner') {
+                var mineralConfig = this._room.memory.base.roleConfig.MineralMiner || {};
+                var maxMiners = mineralConfig.maxNumber === undefined ? 1 : mineralConfig.maxNumber;
+                var desiredMiners = MineralManager.getDesiredMinerCount(this._room);
+                requiredNumber = Math.max(requiredNumber, Math.min(desiredMiners, maxMiners));
             }
             if (role.roleName == 'Defender') {
                 foundNumber = MainCache.getCreepsByHome(baseName).filter(creep => {
@@ -290,6 +299,7 @@ class BaseManager {
 	        	.forEach(creep => {
             try {
                 var creepRole = this._findNecessaryMandatoryRole(creep.memory.role);
+                if (LabManager.runCreep(creep, creepRole)) return;
                 creepRole.run(creep, this._room);
 
                 // Safe role counting with defensive checks against foreign or uninitialized rooms

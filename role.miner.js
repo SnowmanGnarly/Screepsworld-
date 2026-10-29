@@ -7,8 +7,6 @@ var info = require('./main.info');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
 
-var MemoryManager = require('./manager.memory');
-
 var RolePrototype = require('./role.prototype');
 
 class Miner extends RolePrototype {

@@ -14,8 +14,8 @@ Each tick, `module.exports.loop` in `main.js` proceeds in this order:
 
 1. Instantiate and prioritize all roles through `BaseManager.fetchAllRoles()`.
 2. Initialize CPU tracking, persistent memory/role information, and the per-tick `MainCache`.
-3. Observe intel, plan remote missions, run defense, run factory production goals, plan terminal transfers, run opt-in market work when CPU permits, and then run centralized logistics.
-4. Run base spawning and creep behavior, then towers and links.
+3. Observe intel, plan remote missions, run defense, run factory production goals and lab reactions, plan terminal transfers, run opt-in market work when CPU permits, and then run centralized logistics.
+4. Run base spawning, boost preflight, post-spawn boosting, and creep behavior, then towers and links.
 5. If CPU allows (degraded mode off), update road heatmaps, run the Mayor planner, and draw informational/CPU visuals.
 
 Decentralized creep roles are coordinated by centralized per-room managers. Roles are created once per tick and shared across creeps; durable state lives in Screeps `Memory`, not in role instances.
@@ -34,12 +34,14 @@ Decentralized creep roles are coordinated by centralized per-room managers. Role
 
 | File | Responsibility |
 | --- | --- |
-| `manager.base.js` | Role registry, quotas, recovery, Miner replacement, declarative mission spawn providers, outsourced spawning, and creep dispatch. |
+| `manager.base.js` | Role registry, quotas, recovery, Miner replacement, declarative mission spawn providers, outsourced spawning, boost-aware dispatch, and capped automatic MineralMiner demand. |
 | `manager.memory.js` | Initializes base/spawn/role and empire memory, removes dead-creep and stale visible-structure memory, samples `RawMemory` size. |
 | `manager.intel.js` | Bounded, versioned `Memory.empire` with normalized intel, missions, squads, and reserved alliance storage. |
 | `manager.remote.js` | Explicit outpost configuration, route demand/ROI, suspension/blacklist metadata, mission spawning, and capped construction. |
 | `manager.factory.js` | Goal-driven factory chains with recursive component imports, battery compression, cancellation, local logistics, and energy-reserve protection. |
-| `manager.logistics.js` | Persistent per-room task queue, request generation, endpoint refresh, claims, partial-delivery reconciliation, and dynamic hauler demand. |
+| `manager.mineral.js` | RCL 6+ extractor, mineral regeneration, cooldown, and storage/terminal capacity checks for automatic mining demand. |
+| `manager.lab.js` | Dynamic lab assignments, ordered reaction chains, component imports, exact transport metadata, and opt-in spawn boost requests. |
+| `manager.logistics.js` | Persistent per-room task queue, request generation, endpoint refresh, claims, partial-delivery reconciliation, exact lab transport, and dynamic hauler demand. |
 | `manager.terminal.js` | Reusable resource requests, owned-room balancing, reserve/fee accounting, cooldown-safe sends, and terminal positioning. |
 | `manager.market.js` | Opt-in existing-order trades with price/credit/fee limits, deal caps, failure backoff, and bounded history. |
 | `logistics.runner.js` | Executes a claimed task for Storekeepers/Couriers: pickup, delivery, retry backoff, and foreign-resource recovery. |
@@ -61,12 +63,13 @@ Decentralized creep roles are coordinated by centralized per-room managers. Role
 
 ### Creep roles
 
-All roles extend `RolePrototype` and are registered in `BaseManager.fetchAllRoles()`. Role names in creep memory are `Harvester`, `Defender`, `Builder`, `Upgrader`, `Handyman`, `Explorer`, `Miner`, `Storekeeper`, `Courier`, `Scout`, `Reserver`, `RemoteMiner`, and `RemoteHauler`.
+All roles extend `RolePrototype` and are registered in `BaseManager.fetchAllRoles()`. Role names in creep memory are `Harvester`, `Defender`, `Builder`, `Upgrader`, `Handyman`, `Explorer`, `Miner`, `MineralMiner`, `Storekeeper`, `Courier`, `Scout`, `Reserver`, `RemoteMiner`, and `RemoteHauler`.
 
 | File | Behavior |
 | --- | --- |
 | `role.harvester.js` | Early-game energy bootstrap; fills core structures and can upgrade the controller. Highest normal spawn priority. |
 | `role.miner.js` | Source-assigned static mining with nearby container/storage/link delivery and timed replacement requests. |
+| `role.miner.mineral.js` | Automatically dispatched RCL 6+ mineral harvesting with extractor/regeneration/capacity checks and storage/terminal delivery. |
 | `role.storekeeper.js` | WORK-less, energy-only logistics worker running `LogisticsRunner` tasks. |
 | `role.courier.js` | Multi-resource logistics worker; retains WORK for legacy harvesting routes. |
 | `role.builder.js` | Builds construction sites, balancing distance bands against remaining progress; can fall back to upgrading. |
@@ -131,8 +134,27 @@ room.memory.factory = {
 };
 ```
 
-### 7. RAS & CPU Degradation (`manager.cpu.js`)
-`manager.cpu.js` enters degraded mode when `Game.cpu.bucket < 1000` and leaves it when the bucket is `> 1500` (hysteresis). Remote construction, market order scanning, road watching, Mayor work, and visuals are deferred in degraded mode; memory setup, intel, remote spawn planning, defense, factory production, terminal planning, logistics, spawning, creep execution, towers, and links keep running.
+### 7. Mineral, Lab Reactions & Spawn Boosts (`manager.mineral.js` + `manager.lab.js`)
+At RCL 6+, a built extractor on a regenerated mineral supports one automatically dispatched `MineralMiner` by default when storage or terminal has free capacity. Set `room.memory.base.roleConfig.MineralMiner.maxNumber` to `0` to disable automatic demand; explicit quotas remain supported.
+
+Labs dynamically choose two source labs and all output labs within range 2 of both. Goal-driven planning derives ordered base/T1/T2/T3 reactions from `REACTIONS`, uses storage/terminal/lab inventory and strategic reserves, imports missing components, and generates exact logistics tasks. Reaction goals and boost policies are empty by default:
+
+```javascript
+room.memory.lab = {
+    enabled: true,
+    goals: { utrium_alkalide: 1000, catalyzed_utrium_alkalide: 500 },
+    reserves: { utrium: 200, oxygen: 200 },
+    boosts: {
+        Upgrader: { work: 'catalyzed_ghodium_acid', required: false },
+        Defender: { attack: 'catalyzed_utrium_acid', work: 'catalyzed_zynthium_alkalide', required: false }
+    }
+};
+```
+
+Boost policies are opt-in and all-or-unboosted per spawn. Required policies wait for sufficient stocked lab compounds and energy; optional policies spawn unboosted when unavailable. Emergency Harvester recovery bypasses boosts. To keep a boost lab stocked, set `inputResourceType` (and optionally `targetAmount`, default 1000) in its structure memory via `MainUtil.fetchMemoryOfStructure(lab)`; logistics keeps it filled, boosting never clears that setting or drains the lab, and such labs are excluded from reaction assignments and reaction stock counts. After spawning, creeps move to their reserved labs and finish boosting before ordinary role work. Mineral harvesting, lab reactions, and boost processing continue in degraded CPU mode.
+
+### 8. RAS & CPU Degradation (`manager.cpu.js`)
+`manager.cpu.js` enters degraded mode when `Game.cpu.bucket < 1000` and leaves it when the bucket is `> 1500` (hysteresis). Remote construction, market order scanning, road watching, Mayor work, and visuals are deferred in degraded mode; memory setup, intel, remote spawn planning, defense, factory production, lab reactions and boost processing, terminal planning, logistics, mineral harvesting, other spawning, creep execution, towers, and links keep running.
 
 ---
 
@@ -151,7 +173,7 @@ There is no compile, lint, format, watch, or upload script — the root `.js` fi
 
 | Test file | Covers |
 | --- | --- |
-| `test/main.loop.test.js` | Full-loop bootstrap integration. |
+| `test/main.loop.test.js` | Full-loop bootstrap integration and multi-tick scenarios: CPU deferral, creep replacement, logistics task lifecycle, and invasion response. |
 | `test/logistics.regression.test.js` | Queue bounds, stable IDs, claims, partial loads, legacy routes, worker demand. |
 | `test/defense.regression.test.js` | Safe mode, target validation, alerts, tower decisions, defender behavior. |
 | `test/planner.regression.test.js` | RCL placement, slots, link roles, layout performance, occupied construction positions. |
@@ -159,9 +181,12 @@ There is no compile, lint, format, watch, or upload script — the root `.js` fi
 | `test/remote.regression.test.js` | Empire bounds, reservation, remote economy, demand/ROI, construction, defense, and mission spawning. |
 | `test/economy.regression.test.js` | Requests, terminal reserves/fees, balancing, stock policies, market orders, limits, and retries. |
 | `test/factory.regression.test.js` | Recursive factory goals, component requests, logistics, cancellation, reserve protection, and multi-room chains. |
+| `test/mineral.regression.test.js` | Extractor/mineral readiness, automatic spawning, correct mineral harvesting, capacity, and delivery. |
+| `test/lab.regression.test.js` | Lab topology, recursive reactions, terminal imports, cooldowns, exact logistics, reassignment, and reserves. |
+| `test/boost.regression.test.js` | Boost preflight, costs, reservations, multi-lab movement, cleanup, emergency bypass, and outsourced spawning. |
 | `test/syntax.test.js` | `node --check` on every root-level `.js` file. |
 
-Tests use the local mocks in `test/helpers/screeps.js` (`resetScreeps`, `makeRoom`, `makeStructure`, `makeCreep`, `makeSpawn`, `makeStore`, `setFind`, `registerObject`); they do not connect to a Screeps server. Note that `logistics.runner.js` uses `// @ts-check` with JSDoc types — keep those annotations valid.
+Tests use the local mocks in `test/helpers/screeps.js` (`resetScreeps`, `makeRoom`, `makeStructure`, `makeCreep`, `makeSpawn`, `makeStore`, `makeLab`, `setFind`, `registerObject`); they do not connect to a Screeps server. Note that `logistics.runner.js` uses `// @ts-check` with JSDoc types — keep those annotations valid.
 
 ## 🚢 Deployment
 
@@ -171,7 +196,7 @@ No automated deployment process or CI exists in this repository. Deployment to a
 
 ## 📋 Roadmap
 
-For the full phased architectural roadmap and implementation tracker, see [TODO.md](./TODO.md). Phase 2A remote outposts, Phase 2B terminal/market behavior, and Phase 2C goal-driven factory chains are implemented. Mineral harvesting, lab reactions and boosts, deposit harvesting, observer/power, and offensive warfare systems remain planned or backlog items.
+For the full phased architectural roadmap and implementation tracker, see [TODO.md](./TODO.md). Phase 2A remote outposts, Phase 2B terminal/market behavior, Phase 2C goal-driven factory chains, mineral harvesting, lab reactions, and opt-in spawn boosts are implemented. Deposit harvesting, observer/power, and offensive warfare systems remain planned or backlog items.
 
 ---
 

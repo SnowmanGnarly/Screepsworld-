@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const {
     makeStore, makeRoom, makeStructure, makeCreep, makeSpawn, makePosition, setFind, resetScreeps, registerObject,
 } = require('./helpers/screeps');
+const MainCache = require('../main.cache');
 const DefenseManager = require('../manager.defense');
 const TowerManager = require('../manager.tower');
 const Defender = require('../role.defender');
@@ -139,6 +140,19 @@ describe('Defense reliability regressions', function () {
         setFind(room, FIND_MY_SPAWNS, []);
         new TowerManager(room).runTowers();
         assert.equal(defenderTower.attacks.length, 0);
+    });
+
+    it('does not add storage to the cached spawn list when Safe Mode protects a spawnless room', function () {
+        const room = defenseRoom();
+        room.storage = makeStructure(room, STRUCTURE_STORAGE, { id: 'storage', pos: makePosition(room, 25, 25) });
+        const invader = hostile(room, { [ATTACK]: 6 }, makePosition(room, 26, 25));
+        setFind(room, FIND_HOSTILE_CREEPS, [invader]);
+        setFind(room, FIND_MY_SPAWNS, []);
+        setFind(room, FIND_MY_STRUCTURES, []);
+        setFind(room, FIND_MY_CREEPS, []);
+        new DefenseManager(room).run();
+        assert.equal(room.controller.activations, 1);
+        assert.deepEqual(MainCache.find(room, FIND_MY_SPAWNS), []);
     });
 
     it('alerts immediately and then honors the per-room rate limit', function () {

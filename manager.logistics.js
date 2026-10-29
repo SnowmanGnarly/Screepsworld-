@@ -228,7 +228,22 @@ class LogisticsManager {
             }
         }
 
-        if (task.factoryInput && task.resourceType === RESOURCE_ENERGY) {
+        if (task.labInput && target && task.resourceType !== RESOURCE_ENERGY) {
+            var labMemory = MainUtil.fetchMemoryOfStructure(target);
+            var expectedResource = labMemory.inputResourceType || labMemory.resourceType;
+            if (expectedResource !== task.resourceType) {
+                this._removeTask(task.id);
+                return;
+            }
+            var targetAmount = labMemory.targetAmount === undefined ? 1000 : Math.max(0, Number(labMemory.targetAmount) || 0);
+            var deficit = Math.max(0, targetAmount - target.store.getUsedCapacity(task.resourceType));
+            task.remaining = Math.min(task.remaining, deficit);
+            if (task.remaining <= 0) {
+                this._removeTask(task.id);
+                return;
+            }
+        }
+        if ((task.factoryInput || task.labInput) && task.resourceType === RESOURCE_ENERGY) {
             task.remaining = Math.min(task.remaining, TerminalManager.getAvailable(this._room, RESOURCE_ENERGY));
         }
         task.state = task.remaining > 0 && source && target && sourceAmount > 0 && targetFree > 0 ? 'open' : 'unavailable';
@@ -262,13 +277,16 @@ class LogisticsManager {
             filter: structure => structure.structureType == STRUCTURE_LAB
         });
         labs.forEach(lab => {
-            if (lab.store.getFreeCapacity(RESOURCE_ENERGY) >= 400) this._createSupplyTask(lab, RESOURCE_ENERGY, 65);
-            var memory = lab.memory || {};
+            var memory = MainUtil.fetchMemoryOfStructure(lab);
+            var energyFree = lab.store.getFreeCapacity(RESOURCE_ENERGY);
+            if (energyFree >= 400) this._createLabSupplyTask(lab, RESOURCE_ENERGY, 65, energyFree);
             var inputResource = memory.inputResourceType || memory.resourceType;
-            if (inputResource && lab.store.getUsedCapacity(inputResource) < (memory.targetAmount || 1000)) {
-                this._createSupplyTask(lab, inputResource, 60);
+            var targetAmount = memory.targetAmount === undefined ? 1000 : Math.max(0, Number(memory.targetAmount) || 0);
+            var inputMissing = inputResource ? targetAmount - lab.store.getUsedCapacity(inputResource) : 0;
+            if (inputResource && inputMissing > 0 && (!lab.mineralType || lab.mineralType === inputResource)) {
+                this._createLabSupplyTask(lab, inputResource, 60, inputMissing);
             }
-            if (memory.outputResourceType && lab.store.getUsedCapacity(memory.outputResourceType) > 0) {
+            if (memory.outputResourceType && LogisticsManager.getResourceAmount(lab, memory.outputResourceType) > 0) {
                 this._createCollectionTask(lab, memory.outputResourceType, 65);
             }
         });
@@ -386,17 +404,30 @@ class LogisticsManager {
         });
     }
 
-    _createSupplyTask(target, resourceType, priority) {
+    _createSupplyTask(target, resourceType, priority, amount) {
+        if (amount === undefined) amount = target.store.getFreeCapacity(resourceType);
+        amount = Math.min(Math.max(0, Number(amount) || 0), LogisticsManager.getTargetFree(target, resourceType));
+        if (amount <= 0) return null;
         var source = this._findBestResourceSourceFor(target, resourceType);
         if (!source) return null;
-        var amount = target.store.getFreeCapacity(resourceType);
         return this._createTask(source.id, target.id, resourceType, amount, priority, KIND_SUPPLY);
     }
 
-    _createCollectionTask(source, resourceType, priority) {
+    _createLabSupplyTask(lab, resourceType, priority, amount) {
+        if (resourceType === RESOURCE_ENERGY) {
+            amount = Math.min(amount, TerminalManager.getAvailable(this._room, RESOURCE_ENERGY));
+        }
+        var task = this._createSupplyTask(lab, resourceType, priority, amount);
+        if (task) task.labInput = true;
+        return task;
+    }
+
+    _createCollectionTask(source, resourceType, priority, amount) {
         var target = this._findNearestRefillTarget(source, resourceType);
         if (!target || target.id === source.id) return null;
-        var amount = source.amount !== undefined ? source.amount : source.store.getUsedCapacity(resourceType);
+        if (amount === undefined) amount = LogisticsManager.getResourceAmount(source, resourceType);
+        amount = Math.max(0, Number(amount) || 0);
+        if (amount <= 0) return null;
         return this._createTask(source.id, target.id, resourceType, amount, priority, KIND_COLLECT);
     }
 
@@ -491,14 +522,23 @@ class LogisticsManager {
     static getResourceAmount(object, resourceType) {
         if (!object) return 0;
         if (object.amount !== undefined) return object.resourceType === resourceType ? object.amount : 0;
-        if (object.store) return object.store.getUsedCapacity(resourceType) || 0;
+        if (object.store) {
+            var amount = object.store.getUsedCapacity(resourceType) || 0;
+            if (object.structureType === STRUCTURE_LAB && object.mineralType === resourceType && object.memory) {
+                amount = Math.max(0, amount - (object.memory.reservedBoostAmount || 0));
+            }
+            return amount;
+        }
         if (object.energy !== undefined && resourceType === RESOURCE_ENERGY) return object.energy;
         if (object.mineralAmount !== undefined && object.mineralType === resourceType) return object.mineralAmount;
         return 0;
     }
 
     static getTargetFree(target, resourceType) {
-        return target && target.store ? target.store.getFreeCapacity(resourceType) || 0 : 0;
+        if (!target || !target.store) return 0;
+        if (target.structureType === STRUCTURE_LAB && resourceType !== RESOURCE_ENERGY &&
+            target.mineralType && target.mineralType !== resourceType) return 0;
+        return target.store.getFreeCapacity(resourceType) || 0;
     }
 
     static hasEligibleWork(room, options = {}) {
@@ -554,11 +594,6 @@ class LogisticsManager {
             lastCargo: currentCargo,
         };
         return selectedTask;
-    }
-
-    static completeTask(room, taskId) {
-        if (!room.memory.logistics) return;
-        room.memory.logistics.tasks = room.memory.logistics.tasks.filter(task => task.id !== taskId);
     }
 
     static releaseTask(room, taskId) {

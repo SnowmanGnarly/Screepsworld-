@@ -226,10 +226,6 @@ class FactoryManager {
         return plan;
     }
 
-    static buildDependencyPlan(room, factory, resourceType, amount, options = {}) {
-        return this.planRecipe(room, factory, resourceType, amount, options);
-    }
-
     static getRecipe(resourceType) {
         if (typeof COMMODITIES === 'undefined' || !COMMODITIES[resourceType]) return null;
         var recipe = COMMODITIES[resourceType];

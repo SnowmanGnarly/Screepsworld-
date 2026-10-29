@@ -25,6 +25,7 @@ var MainCache = require('./main.cache');
 var info = require('./main.info');
 
 var MemoryManager = require('./manager.memory');
+var LabManager = require('./manager.lab');
 
 class RolePrototype {
 
@@ -236,10 +237,6 @@ class RolePrototype {
 		if (creep.room.name === roomName) return true;
 		this._moveToLocation(creep, new RoomPosition(x, y, roomName));
 		return false;
-	}
-
-	_travelToRoom(creep, destination, x = 25, y = 25) {
-		return this._moveToRoom(creep, destination, x, y);
 	}
 
 	/*
@@ -593,61 +590,6 @@ class RolePrototype {
 	}
 
 	/*
-	 * Creep loots the tombstone.
-	 * 
-	 * @param {Creep} creep
-	 */
-
-	_lootTombstone(creep, tombstone) {
-		var withdrawResult = creep.withdraw(tombstone, this._resourceType);
-		if (withdrawResult == ERR_NOT_IN_RANGE) {
-			if (creep.memory.debug) {
-				info.log('⚰ ' + MainUtil.getDisplayName(creep) + ' is moving to tombstone ' + MainUtil.getDisplayName(tombstone), this._baseRoom);
-			}
-			this._moveToLocation(creep, tombstone);
-		} else if (withdrawResult == OK) {
-			if (creep.memory.debug) {
-				info.log('⚰ ' + MainUtil.getDisplayName(creep) + ' is looting the tombstone ' + MainUtil.getDisplayName(tombstone), this._baseRoom);
-			}
-		} else if (withdrawResult == ERR_NOT_ENOUGH_RESOURCES) {
-			// Tombstone was depleted by another creep, this is normal
-			if (creep.memory.debug) {
-				info.log('⚰ ' + MainUtil.getDisplayName(creep) + ' tombstone was already looted', this._baseRoom);
-			}
-		} else {
-			info.log('⚰ ' + MainUtil.getDisplayName(creep) + ' cannot loot the tombstone: ' + withdrawResult, this._baseRoom);
-		}
-	}
-
-	/*
-	 * Creep loots the ruin.
-	 * 
-	 * @param {Creep} creep
-	 * @param {Ruin} ruin
-	 */
-
-	_lootRuin(creep, ruin) {
-		var withdrawResult = creep.withdraw(ruin, this._resourceType);
-		if (withdrawResult == ERR_NOT_IN_RANGE) {
-			if (creep.memory.debug) {
-				info.log('🏚️ ' + MainUtil.getDisplayName(creep) + ' is moving to ruin ' + MainUtil.getDisplayName(ruin), this._baseRoom);
-			}
-			this._moveToLocation(creep, ruin);
-		} else if (withdrawResult == OK) {
-			if (creep.memory.debug) {
-				info.log('🏚️ ' + MainUtil.getDisplayName(creep) + ' is looting the ruin ' + MainUtil.getDisplayName(ruin), this._baseRoom);
-			}
-		} else if (withdrawResult == ERR_NOT_ENOUGH_RESOURCES) {
-			// Ruin was depleted by another creep, this is normal
-			if (creep.memory.debug) {
-				info.log('🏚️ ' + MainUtil.getDisplayName(creep) + ' ruin was already looted', this._baseRoom);
-			}
-		} else {
-			info.log('🏚️ ' + MainUtil.getDisplayName(creep) + ' cannot loot the ruin: ' + withdrawResult, this._baseRoom);
-		}
-	}
-
-	/*
 	 * Creep works.
 	 * 
 	 * @param {Creep} creep
@@ -695,16 +637,19 @@ class RolePrototype {
 		if (!body) {
 			return false;
 		}
+		var memory = {
+			role: this.roleName,
+			home: spawn.memory.home,
+		};
+		var boostDecision = LabManager.planSpawnBoost(spawn, body, this.roleName, memory, options);
+		if (!boostDecision.allow) return false;
 		var newName = this._createCreepName(spawn);
-		var spawnResult = spawn.spawnCreep(body, newName, {
-			memory: {
-				role: this.roleName,
-				home: spawn.memory.home,
-			}
-		});
+		var spawnResult = spawn.spawnCreep(body, newName, { memory: memory });
 		if (spawnResult == OK) {
-			MainCache.recordSpawn(Game.creeps[newName], spawn);
-			return Game.creeps[newName];
+			var resultingCreep = Game.creeps[newName];
+			if (boostDecision.plan) LabManager.registerSpawnBoost(resultingCreep, boostDecision.plan);
+			MainCache.recordSpawn(resultingCreep, spawn);
+			return resultingCreep;
 		}
 		var message = 'Could not spawn ' + this.roleName + ' ' + newName + ' (' + body.length + ' parts, ' + this._calculateCostsForParts(body) + ' energy): ' + spawnResult;
 		if (spawnResult == ERR_NOT_ENOUGH_ENERGY || spawnResult == ERR_BUSY) {
@@ -722,11 +667,15 @@ class RolePrototype {
 		var cost = this._calculateCostsForParts(body);
 		if (!Number.isFinite(cost) || cost > spawn.room.energyAvailable) return false;
 		body = body.slice();
+		var boostDecision = LabManager.planSpawnBoost(spawn, body, this.roleName, memory);
+		if (!boostDecision.allow) return false;
 		var newName = this._createCreepName(spawn);
 		var spawnResult = spawn.spawnCreep(body, newName, { memory: memory });
 		if (spawnResult == OK) {
-			MainCache.recordSpawn(Game.creeps[newName], spawn);
-			return Game.creeps[newName];
+			var resultingCreep = Game.creeps[newName];
+			if (boostDecision.plan) LabManager.registerSpawnBoost(resultingCreep, boostDecision.plan);
+			MainCache.recordSpawn(resultingCreep, spawn);
+			return resultingCreep;
 		}
 		var message = 'Could not spawn ' + this.roleName + ' ' + newName + ' (' + body.length + ' parts, ' + cost + ' energy): ' + spawnResult;
 		if (spawnResult == ERR_NOT_ENOUGH_ENERGY || spawnResult == ERR_BUSY) {

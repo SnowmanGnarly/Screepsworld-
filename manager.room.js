@@ -158,10 +158,6 @@ class RoomManager {
 		return this._room.memory.roomManager;
 	}
 
-	_fetchTileAt(x, y) {
-		return this._getTileFromStuffs(this._room.lookAt(x, y));
-	}
-
 	_filterByTiles(stuffs, tiles) {
 		return stuffs.map(stuff => {
 			var filteredTiles = tiles.filter(tile => tile.isEqual(stuff));

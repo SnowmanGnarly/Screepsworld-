@@ -184,14 +184,6 @@ class MainInfo {
 			.filter(height => Number.isFinite(height));
 		return heights.length > 0 ? Math.max(...heights) : 10;
     }
-
-	static getLine(index) {
-    	return this._lines[index];
-    }
-    
-	static getLines() {
-    	return this._lines;
-    }
 };
 
 MainInfo._lineTimes = [];

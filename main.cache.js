@@ -4,7 +4,6 @@ class MainCache {
 		this._state = {
 			tick: Game.time,
 			roles: allRoles,
-			rolesByName: new Map(allRoles.map(role => [role.roleName, role])),
 			rooms: null,
 			spawns: null,
 			creeps: null,
@@ -48,10 +47,6 @@ class MainCache {
 
 	static getFlags() {
 		return this._getCollection('flags', Game.flags);
-	}
-
-	static getRoleByName(roleName) {
-		return this._getState().rolesByName.get(roleName);
 	}
 
 	static getCreepsByHome(baseName) {
