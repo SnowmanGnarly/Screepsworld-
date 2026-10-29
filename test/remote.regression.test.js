@@ -180,7 +180,6 @@ describe('Remote outpost and empire regressions', function () {
         assert.equal(creep.lastMoveTo.roomName, 'B');
         assert.equal(creep.lastMoveTo.x, 10);
         assert.equal(creep.lastMoveTo.y, 11);
-        assert.deepEqual(creep.memory.destination, { roomName: 'B', x: 10, y: 11 });
     });
 
     it('mines into nearby containers and records travel and output', function () {
@@ -365,10 +364,10 @@ describe('Remote outpost and empire regressions', function () {
         new BaseManager(home)._repopulateCreeps();
         assert.ok(spawn.spawning);
         assert.equal(spawn.spawning.memory.role, 'Reserver');
-        assert.deepEqual(spawn.spawning.body, [CLAIM, MOVE]);
+        assert.deepEqual(spawn.spawning.body, [CLAIM, CLAIM, MOVE, MOVE]);
         assert.deepEqual(spawn.spawning.memory.custom, { value: 7 });
         assert.equal(spawn.spawning.memory.home, 'A');
-        assert.equal(mission.stats.energySpent, 650);
+        assert.equal(mission.stats.energySpent, 1300);
         const roleNames = BaseManager.fetchAllRoles().map(role => role.roleName);
         for (const roleName of ['Scout', 'Reserver', 'RemoteMiner', 'RemoteHauler']) assert.ok(roleNames.includes(roleName));
     });

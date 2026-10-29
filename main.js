@@ -16,6 +16,7 @@ var MemoryManager = require('./manager.memory');
 var IntelManager = require('./manager.intel');
 var RemoteManager = require('./manager.remote');
 var FactoryManager = require('./manager.factory');
+var LabManager = require('./manager.lab');
 var TerminalManager = require('./manager.terminal');
 var MarketManager = require('./manager.market');
 var RoadManager = require('./manager.road');
@@ -42,6 +43,7 @@ module.exports.loop = function () {
     CpuManager.measure('RemoteManager', () => RemoteManager.runAll(CpuManager.shouldRunDeferred()));
     CpuManager.measure('DefenseManager', () => DefenseManager.runAll());
     CpuManager.measure('FactoryManager', () => FactoryManager.runAll());
+    CpuManager.measure('LabManager', () => LabManager.runAll());
     CpuManager.measure('TerminalManager', () => TerminalManager.runAll());
     CpuManager.measure('MarketManager', () => MarketManager.runAll(CpuManager.shouldRunDeferred()));
     CpuManager.measure('LogisticsManager', LogisticsManager.runAll);

@@ -3,7 +3,6 @@
  * a new base there.
  */
  
-var constants = require('./main.constants');
 var info = require('./main.info');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');

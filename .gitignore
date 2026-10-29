@@ -12,3 +12,6 @@ package-lock.json
 *.log
 d
 
+
+# Local Claude Code rules (ECC common + typescript, not shared)
+.claude/rules/

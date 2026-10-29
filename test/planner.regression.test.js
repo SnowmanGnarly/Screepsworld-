@@ -82,6 +82,7 @@ describe('RCL placement regressions', function () {
         assert.equal(manager.fetchFreeBuildingSlots(RoomManager.TILE_TOWER), 1);
         setFind(room, FIND_MY_CONSTRUCTION_SITES, [{ structureType: STRUCTURE_TOWER }]);
         setFind(room, FIND_STRUCTURES, []);
+        require('../main.cache').initRound([]);
         assert.equal(manager.fetchFreeBuildingSlots(RoomManager.TILE_TOWER), 0);
     });
 

@@ -375,14 +375,6 @@ class RemoteManager {
         };
     }
 
-    static getRouteDemand(mission, context = {}) {
-        return this.calculateRouteDemand(mission, context);
-    }
-
-    static calculateHaulerDemand(mission, context = {}) {
-        return this.calculateRouteDemand(mission, context).haulers;
-    }
-
     static calculateNetROI(mission) {
         var stats = mission.stats || {};
         var net = (stats.energyDelivered || 0) - (stats.energySpent || 0) -

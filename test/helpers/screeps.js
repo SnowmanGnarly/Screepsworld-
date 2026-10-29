@@ -4,8 +4,20 @@ MainInfo.__originalLog = MainInfo.log;
 
 const constants = {
     RESOURCE_ENERGY: 'energy', RESOURCE_OXYGEN: 'oxygen', RESOURCE_ZYNTHIUM: 'zynthium',
-    RESOURCE_HYDROGEN: 'hydrogen', RESOURCE_BATTERY: 'battery', RESOURCE_COMPOSITE: 'composite',
-    RESOURCE_OXIDANT: 'oxidant',
+    RESOURCE_HYDROGEN: 'hydrogen', RESOURCE_UTRIUM: 'utrium', RESOURCE_LEMERGIUM: 'lemergium',
+    RESOURCE_KEANIUM: 'keanium', RESOURCE_CATALYST: 'catalyst', RESOURCE_GHODIUM: 'ghodium',
+    RESOURCE_HYDROXIDE: 'hydroxide', RESOURCE_ZYNTHIUM_KEANITE: 'zynthium_keanite',
+    RESOURCE_UTRIUM_LEMERGITE: 'utrium_lemergite', RESOURCE_UTRIUM_HYDRIDE: 'utrium_hydride',
+    RESOURCE_UTRIUM_OXIDE: 'utrium_oxide', RESOURCE_UTRIUM_ACID: 'utrium_acid',
+    RESOURCE_UTRIUM_ALKALIDE: 'utrium_alkalide', RESOURCE_ZYNTHIUM_HYDRIDE: 'zynthium_hydride',
+    RESOURCE_ZYNTHIUM_OXIDE: 'zynthium_oxide', RESOURCE_ZYNTHIUM_ALKALIDE: 'zynthium_alkalide',
+    RESOURCE_GHODIUM_HYDRIDE: 'ghodium_hydride', RESOURCE_GHODIUM_ACID: 'ghodium_acid',
+    RESOURCE_GHODIUM_ALKALIDE: 'ghodium_alkalide', RESOURCE_CATALYZED_UTRIUM_ACID: 'catalyzed_utrium_acid',
+    RESOURCE_CATALYZED_UTRIUM_ALKALIDE: 'catalyzed_utrium_alkalide',
+    RESOURCE_CATALYZED_ZYNTHIUM_ALKALIDE: 'catalyzed_zynthium_alkalide',
+    RESOURCE_CATALYZED_GHODIUM_ACID: 'catalyzed_ghodium_acid',
+    RESOURCE_CATALYZED_GHODIUM_ALKALIDE: 'catalyzed_ghodium_alkalide',
+    RESOURCE_BATTERY: 'battery', RESOURCE_COMPOSITE: 'composite', RESOURCE_OXIDANT: 'oxidant',
     FIND_MY_STRUCTURES: 'myStructures', FIND_STRUCTURES: 'structures', FIND_SOURCES: 'sources',
     FIND_SOURCES_ACTIVE: 'activeSources', FIND_MY_SPAWNS: 'mySpawns', FIND_HOSTILE_CREEPS: 'hostiles',
     FIND_HOSTILE_STRUCTURES: 'hostileStructures',
@@ -23,11 +35,62 @@ const constants = {
     RANGED_ATTACK: 'ranged_attack', HEAL: 'heal', CLAIM: 'claim',
     BODYPART_COST: { work: 100, move: 50, carry: 50, tough: 10, attack: 80, ranged_attack: 150, heal: 250, claim: 600 },
     OK: 0, ERR_NOT_OWNER: -1, ERR_NO_PATH: -2, ERR_NAME_EXISTS: -3, ERR_BUSY: -4,
-    ERR_NOT_ENOUGH_ENERGY: -6, ERR_NOT_ENOUGH_RESOURCES: -6, ERR_INVALID_TARGET: -7,
-    ERR_FULL: -8, ERR_NOT_IN_RANGE: -9, ERR_NO_BODYPART: -12, ERR_RCL_NOT_ENOUGH: -14,
-    ERR_TIRED: -11, ERR_INVALID_ARGS: -10,
+    ERR_NOT_FOUND: -5, ERR_NOT_ENOUGH_ENERGY: -6, ERR_NOT_ENOUGH_RESOURCES: -6,
+    ERR_INVALID_TARGET: -7, ERR_FULL: -8, ERR_NOT_IN_RANGE: -9, ERR_NO_BODYPART: -12,
+    ERR_RCL_NOT_ENOUGH: -14, ERR_TIRED: -11, ERR_INVALID_ARGS: -10,
     ORDER_BUY: 'buy', ORDER_SELL: 'sell', TERMINAL_COOLDOWN: 10,
-    TOWER_ENERGY_COST: 10, TERRAIN_MASK_WALL: 1,
+    LAB_REACTION_AMOUNT: 5, LAB_BOOST_ENERGY: 20, LAB_BOOST_MINERAL: 30,
+    LAB_ENERGY_CAPACITY: 2000, LAB_MINERAL_CAPACITY: 3000,
+    HARVEST_MINERAL_POWER: 1, EXTRACTOR_COOLDOWN: 5,
+    TOWER_ENERGY_COST: 10, TOWER_POWER_ATTACK: 600, TOWER_OPTIMAL_RANGE: 5, TOWER_FALLOFF_RANGE: 20, TOWER_FALLOFF: 0.75,
+    TERRAIN_MASK_WALL: 1, TERRAIN_MASK_SWAMP: 2, HEAL_POWER: 12, RANGED_HEAL_POWER: 4,
+    MAX_CREEP_SIZE: 50, CREEP_LIFE_TIME: 1500, CREEP_CLAIM_LIFE_TIME: 600, CREEP_SPAWN_TIME: 3, CARRY_CAPACITY: 50,
+    HARVEST_POWER: 2, BUILD_POWER: 5, ENERGY_REGEN_TIME: 300, SOURCE_ENERGY_CAPACITY: 3000, SOURCE_ENERGY_NEUTRAL_CAPACITY: 1500,
+    REACTIONS: {
+        hydrogen: { oxygen: 'hydroxide' },
+        oxygen: { hydrogen: 'hydroxide', utrium: 'utrium_oxide', zynthium: 'zynthium_oxide', ghodium: 'ghodium_oxide' },
+        utrium: { hydrogen: 'utrium_hydride', oxygen: 'utrium_oxide', lemergium: 'utrium_lemergite' },
+        lemergium: { utrium: 'utrium_lemergite' },
+        zynthium: { keanium: 'zynthium_keanite', oxygen: 'zynthium_oxide' },
+        keanium: { zynthium: 'zynthium_keanite' },
+        utrium_lemergite: { zynthium_keanite: 'ghodium' }, zynthium_keanite: { utrium_lemergite: 'ghodium' },
+        ghodium: { hydrogen: 'ghodium_hydride', oxygen: 'ghodium_oxide' },
+        utrium_hydride: { hydroxide: 'utrium_acid' }, utrium_oxide: { hydroxide: 'utrium_alkalide' },
+        zynthium_oxide: { hydroxide: 'zynthium_alkalide' },
+        ghodium_hydride: { hydroxide: 'ghodium_acid' }, ghodium_oxide: { hydroxide: 'ghodium_alkalide' },
+        hydroxide: {
+            utrium_hydride: 'utrium_acid', utrium_oxide: 'utrium_alkalide',
+            zynthium_oxide: 'zynthium_alkalide', ghodium_hydride: 'ghodium_acid', ghodium_oxide: 'ghodium_alkalide',
+        },
+        catalyst: {
+            utrium_acid: 'catalyzed_utrium_acid', utrium_alkalide: 'catalyzed_utrium_alkalide',
+            zynthium_alkalide: 'catalyzed_zynthium_alkalide', ghodium_acid: 'catalyzed_ghodium_acid',
+            ghodium_alkalide: 'catalyzed_ghodium_alkalide',
+        },
+        utrium_acid: { catalyst: 'catalyzed_utrium_acid' },
+        utrium_alkalide: { catalyst: 'catalyzed_utrium_alkalide' },
+        zynthium_alkalide: { catalyst: 'catalyzed_zynthium_alkalide' },
+        ghodium_acid: { catalyst: 'catalyzed_ghodium_acid' },
+        ghodium_alkalide: { catalyst: 'catalyzed_ghodium_alkalide' },
+    },
+    REACTION_TIME: {
+        hydroxide: 20, zynthium_keanite: 5, utrium_lemergite: 5, ghodium: 5,
+        utrium_hydride: 10, utrium_oxide: 10, zynthium_oxide: 10, ghodium_hydride: 10, ghodium_oxide: 10,
+        utrium_acid: 5, utrium_alkalide: 5, zynthium_alkalide: 5, ghodium_acid: 5, ghodium_alkalide: 5,
+        catalyzed_utrium_acid: 60, catalyzed_utrium_alkalide: 60, catalyzed_zynthium_alkalide: 60,
+        catalyzed_ghodium_acid: 60, catalyzed_ghodium_alkalide: 60,
+    },
+    BOOSTS: {
+        utrium_hydride: { attack: {} }, utrium_acid: { attack: {} }, catalyzed_utrium_acid: { attack: {} },
+        utrium_oxide: { work: { harvest: 2 } }, utrium_alkalide: { work: { harvest: 4 } },
+        catalyzed_utrium_alkalide: { work: { harvest: 6 } },
+        zynthium_oxide: { work: { dismantle: 2 } }, zynthium_alkalide: { work: { dismantle: 4 } },
+        catalyzed_zynthium_alkalide: { work: { dismantle: 6 } },
+        ghodium_hydride: { work: { upgradeController: 1.5 } }, ghodium_acid: { work: { upgradeController: 1.8 } },
+        catalyzed_ghodium_acid: { work: { upgradeController: 2 } },
+        ghodium_oxide: { tough: {} }, ghodium_alkalide: { tough: {} }, catalyzed_ghodium_alkalide: { tough: {} },
+        LO: { heal: { heal: 2, rangedHeal: 2 } }, LHO2: { heal: { heal: 3, rangedHeal: 3 } }, XLHO2: { heal: { heal: 4, rangedHeal: 4 } },
+    },
 };
 
 Object.assign(global, constants);
@@ -95,10 +158,11 @@ class MockRoomPosition {
     }
 }
 
-function makeStore(capacity, contents = {}) {
+function makeStore(capacity, contents = {}, resourceCapacities = null) {
     const store = { ...contents };
     Object.defineProperties(store, {
         _capacity: { value: capacity, writable: true },
+        _resourceCapacities: { value: resourceCapacities },
         getUsedCapacity: {
             value(resourceType) {
                 if (resourceType) return store[resourceType] || 0;
@@ -106,7 +170,11 @@ function makeStore(capacity, contents = {}) {
             },
         },
         getFreeCapacity: {
-            value() {
+            value(resourceType) {
+                if (store._resourceCapacities && resourceType) {
+                    const capacity = resourceType === RESOURCE_ENERGY ? store._resourceCapacities.energy : store._resourceCapacities.mineral;
+                    return Math.max(0, capacity - store.getUsedCapacity(resourceType));
+                }
                 return Math.max(0, store._capacity - store.getUsedCapacity());
             },
         },
@@ -229,6 +297,71 @@ function makeFactory(room, options = {}) {
     return factory;
 }
 
+function makeLab(room, options = {}) {
+    const store = options.store || makeStore(LAB_ENERGY_CAPACITY + LAB_MINERAL_CAPACITY, options.contents || {}, {
+        energy: LAB_ENERGY_CAPACITY,
+        mineral: LAB_MINERAL_CAPACITY,
+    });
+    const lab = makeStructure(room, STRUCTURE_LAB, {
+        id: options.id || 'lab-' + Math.random().toString(36).slice(2),
+        pos: options.pos,
+        store,
+        memory: options.memory,
+        extra: { my: true, cooldown: options.cooldown || 0, reactions: [], boosts: [] },
+    });
+    Object.defineProperty(lab, 'mineralType', {
+        get() {
+            return Object.keys(lab.store).find(resourceType => resourceType !== RESOURCE_ENERGY && lab.store[resourceType] > 0) || null;
+        },
+    });
+    lab.runReaction = function (inputA, inputB) {
+        if (this.cooldown > 0) return ERR_TIRED;
+        if (!inputA || !inputB || this.pos.getRangeTo(inputA) > 2 || this.pos.getRangeTo(inputB) > 2) return ERR_NOT_IN_RANGE;
+        const reagentA = inputA.mineralType;
+        const reagentB = inputB.mineralType;
+        const product = reagentA && reagentB && REACTIONS[reagentA] && REACTIONS[reagentA][reagentB];
+        if (!product) return ERR_INVALID_ARGS;
+        if (inputA.store.getUsedCapacity(reagentA) < LAB_REACTION_AMOUNT ||
+            inputB.store.getUsedCapacity(reagentB) < LAB_REACTION_AMOUNT) return ERR_NOT_ENOUGH_RESOURCES;
+        if ((this.mineralType && this.mineralType !== product) || this.store.getFreeCapacity(product) < LAB_REACTION_AMOUNT) return ERR_FULL;
+        inputA.store.set(reagentA, inputA.store.getUsedCapacity(reagentA) - LAB_REACTION_AMOUNT);
+        inputB.store.set(reagentB, inputB.store.getUsedCapacity(reagentB) - LAB_REACTION_AMOUNT);
+        this.store.set(product, this.store.getUsedCapacity(product) + LAB_REACTION_AMOUNT);
+        this.cooldown = REACTION_TIME[product] || 0;
+        this.reactions.push({ inputA: inputA.id, inputB: inputB.id, product, amount: LAB_REACTION_AMOUNT });
+        return OK;
+    };
+    lab.boostCreep = function (creep, bodyPartsCount) {
+        if (this.cooldown > 0) return ERR_TIRED;
+        if (this.pos.getRangeTo(creep) > 1) return ERR_NOT_IN_RANGE;
+        const resourceType = this.mineralType;
+        const recipe = resourceType && BOOSTS[resourceType];
+        if (!recipe) return ERR_NOT_ENOUGH_RESOURCES;
+        const eligible = creep.body.filter(part => {
+            const type = typeof part === 'string' ? part : part.type;
+            return recipe[type] && (typeof part === 'string' || !part.boost);
+        });
+        const count = bodyPartsCount === undefined ? eligible.length : Math.min(bodyPartsCount, eligible.length);
+        if (count <= 0) return ERR_NO_BODYPART;
+        if (this.store.getUsedCapacity(resourceType) < count * LAB_BOOST_MINERAL ||
+            this.store.getUsedCapacity(RESOURCE_ENERGY) < count * LAB_BOOST_ENERGY) return ERR_NOT_ENOUGH_RESOURCES;
+        this.store.set(resourceType, this.store.getUsedCapacity(resourceType) - count * LAB_BOOST_MINERAL);
+        this.store.set(RESOURCE_ENERGY, this.store.getUsedCapacity(RESOURCE_ENERGY) - count * LAB_BOOST_ENERGY);
+        let remaining = count;
+        creep.body = creep.body.map(part => {
+            const type = typeof part === 'string' ? part : part.type;
+            if (remaining > 0 && recipe[type] && (typeof part === 'string' || !part.boost)) {
+                remaining--;
+                return Object.assign({}, typeof part === 'object' ? part : {}, { type, boost: resourceType });
+            }
+            return part;
+        });
+        this.boosts.push({ creepName: creep.name, resourceType, count });
+        return OK;
+    };
+    return lab;
+}
+
 function makeCreep(room, options = {}) {
     const creep = {
         name: options.name || 'creep-' + Math.random().toString(36).slice(2),
@@ -248,7 +381,6 @@ function makeCreep(room, options = {}) {
         moveTo(target, moveOptions) {
             creep.lastMoveTo = target;
             creep.moveOptions = moveOptions;
-            creep.memory.moving = true;
             return OK;
         },
         withdraw(source, resourceType, amount) {
@@ -284,6 +416,22 @@ function makeCreep(room, options = {}) {
             if (creep.pos.getRangeTo(source) > 1) return ERR_NOT_IN_RANGE;
             const workParts = creep.getActiveBodyparts(WORK);
             if (workParts === 0) return ERR_NO_BODYPART;
+            if (source.mineralType) {
+                const mineralRoom = source.room || room;
+                const extractor = mineralRoom.find(FIND_MY_STRUCTURES).find(structure => {
+                    return structure.structureType === STRUCTURE_EXTRACTOR && structure.pos.isEqualTo(source.pos);
+                });
+                if (!extractor) return ERR_NOT_FOUND;
+                if (extractor.cooldown > 0) return ERR_TIRED;
+                const available = source.mineralAmount || 0;
+                const count = Math.min(workParts * HARVEST_MINERAL_POWER, available, creep.store.getFreeCapacity(source.mineralType));
+                if (count <= 0) return ERR_NOT_ENOUGH_RESOURCES;
+                source.mineralAmount = available - count;
+                if (source.mineralAmount === 0) source.ticksToRegeneration = 50;
+                extractor.cooldown = EXTRACTOR_COOLDOWN;
+                creep.store.set(source.mineralType, creep.store.getUsedCapacity(source.mineralType) + count);
+                return OK;
+            }
             const resourceType = source.resourceType || RESOURCE_ENERGY;
             const available = source.energy === undefined ? (source.amount === undefined ? 3000 : source.amount) : source.energy;
             const count = Math.min(workParts * 2, available, creep.store.getFreeCapacity(resourceType));
@@ -472,6 +620,12 @@ function resetScreeps(options = {}) {
         [RESOURCE_OXIDANT]: { amount: 10, cooldown: 60, level: 2, components: { [RESOURCE_COMPOSITE]: 20, [RESOURCE_ENERGY]: 100 } },
     };
     MainCache.initRound([]);
+    require('../../main.heap').reset();
+    require('../../main.scheduler').reset();
+    const CpuManager = require('../../manager.cpu');
+    CpuManager._degraded = undefined;
+    CpuManager._measurements = [];
+    CpuManager._resetStatsWindow();
     const info = require('../../main.info');
     info.log = () => {};
     info.warning = () => {};
@@ -492,6 +646,7 @@ module.exports = {
     makeStructure,
     makeTerminal,
     makeFactory,
+    makeLab,
     makeMarket,
     makeCreep,
     makeSpawn,

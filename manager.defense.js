@@ -1,4 +1,3 @@
-var constants = require('./main.constants');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
 var info = require('./main.info');
@@ -165,7 +164,7 @@ class DefenseManager {
         if (!controller || !controller.my || controller.safeMode || controller.safeModeCooldown || !controller.safeModeAvailable) return;
         if (report.level !== 3) return;
 
-        var criticalStructures = MainCache.find(this._room, FIND_MY_SPAWNS);
+        var criticalStructures = MainCache.find(this._room, FIND_MY_SPAWNS).slice();
         if (this._room.storage) criticalStructures.push(this._room.storage);
         var breachedStructure = criticalStructures.find(structure => {
             return hostiles.some(hostile => this._isDangerous(hostile) && hostile.pos.inRangeTo(structure, 3));

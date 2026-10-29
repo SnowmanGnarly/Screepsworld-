@@ -156,6 +156,7 @@ describe('Cross-cutting RAS regressions', function () {
     it('preserves a recovery reserve while only one active Harvester remains', function () {
         const room = economyRoom();
         room.energyAvailable = 400;
+        room.energyCapacityAvailable = 1000;
         const spawn = addSpawn(room);
         const harvester = makeCreep(room, {
             name: 'harvester', ticksToLive: 1000,
