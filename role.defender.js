@@ -3,6 +3,7 @@
  */
 
 var MainCache = require('./main.cache');
+var config = require('./main.config').DEFENSE;
 var RolePrototype = require('./role.prototype');
 var DefenseManager = require('./manager.defense');
 var RemoteManager = require('./manager.remote');
@@ -12,10 +13,21 @@ class Defender extends RolePrototype {
     constructor() {
         super('Defender', '#ff0000', '🛡️');
         this.priority = 90;
+        this.defaultMaxNumber = config.MAX_LOCAL_DEFENDERS;
+        this.alwaysDerived = true; // turning off the economy's automation must never turn off defense
+    }
+
+    getDemand(room) {
+        return room.memory.defense ? room.memory.defense.desiredDefenders || 0 : 0;
+    }
+
+    // defenders are called for a threat, so a dying one is only replaced if the threat remains
+    needsReplacement(creep) {
+        return false;
     }
 
     isNecessary(room) {
-        return room.memory.defense && room.memory.defense.threatLevel >= 2;
+        return room.memory.defense && room.memory.defense.threatLevel >= config.DEFENDER_THREAT_LEVEL;
     }
 
     spawnCreep(spawn) {

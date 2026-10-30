@@ -80,6 +80,7 @@
   - [x] On-demand defenders: dynamically spawn `role.defender.js` during peacetime ($0$ creeps maintained; auto-spawns upon hostile detection).
   - [x] Tower energy reserves: preserve $\ge 200$ energy for combat; prevent non-essential repairs during battle.
   - [x] Safe Mode safeguard: activate safe mode as a last resort if hostiles breach within 3 tiles of spawn/storage and ramparts fail.
+- [x] Minimum-cut rampart line around the planned base, opt-in through `enableFortification` (`main.mincut.js`). Not proven against a real siege.
 - [ ] Add rampart defense matrix with progressive hit leveling ($10\text{k} \rightarrow 100\text{k} \rightarrow 1\text{M} \rightarrow 10\text{M}$).
 
 ---

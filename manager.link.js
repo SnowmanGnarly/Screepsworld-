@@ -19,7 +19,14 @@ class LinkManager {
 	 */
 	
 	static runAll() {
-	    MainUtil.findAllRooms().forEach(room => new LinkManager(room).runLinks());
+	    MainUtil.findAllRooms().forEach(room => {
+	    	try {
+	    		new LinkManager(room).runLinks();
+	    	} catch (error) {
+	    		info.error('Could not run links for ' + room.name + ': ' + error, room);
+	    		console.log(error.stack);
+	    	}
+	    });
 	}
 	
 	/*

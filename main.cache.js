@@ -15,7 +15,18 @@ class MainCache {
 			freeSpawns: new Map(),
 			reservedSpawns: new Set(),
 			roomFinds: new Map(),
+			memos: new Map(),
 		};
+	}
+
+	/*
+	 * Computes a value once per tick. Use it for derived values that many callers ask for.
+	 */
+
+	static memo(key, compute) {
+		var memos = this._getState().memos;
+		if (!memos.has(key)) memos.set(key, compute());
+		return memos.get(key);
 	}
 
 	static _getState() {
@@ -134,6 +145,7 @@ class MainCache {
 
 	static invalidateRoom(room, findType) {
 		var state = this._getState();
+		state.memos.clear();
 		if (!state.roomFinds.has(room.name)) {
 			return;
 		}
@@ -151,6 +163,7 @@ class MainCache {
 	static recordSpawn(creep, spawn) {
 		var state = this._getState();
 		state.reservedSpawns.add(spawn.name);
+		state.memos.clear();
 		state.freeSpawns = new Map();
 		state.creepsByHome = null;
 		state.creepCounts = null;

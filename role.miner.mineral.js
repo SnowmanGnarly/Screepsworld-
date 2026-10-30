@@ -1,3 +1,4 @@
+var config = require('./main.config');
 var RolePrototype = require('./role.prototype');
 var MineralManager = require('./manager.mineral');
 
@@ -6,7 +7,13 @@ class MineralMiner extends RolePrototype {
     constructor() {
         super('MineralMiner', '#888888', '⛏️');
         this.priority = -1;
+        this.defaultMaxNumber = 1;
+        this.alwaysDerived = true;
         this._disableAutomaticLoot = true;
+    }
+
+    getDemand(room) {
+        return MineralManager.getDesiredMinerCount(room);
     }
 
     isNecessary(room) {
@@ -25,7 +32,7 @@ class MineralMiner extends RolePrototype {
     }
 
     _getPartsMaxMultiplier(spawn) {
-        return 5;
+        return config.BODY.DEFAULT_UNITS;
     }
 
     _findTargets(room) {

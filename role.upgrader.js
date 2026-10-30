@@ -2,8 +2,10 @@
  * Upgraders handle the room controller.
  */
 
+var constants = require('./main.constants');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
+var EconomyManager = require('./manager.economy');
 
 var RolePrototype = require('./role.prototype');
 
@@ -12,6 +14,14 @@ class Upgrader extends RolePrototype {
     constructor() {
         super('Upgrader', '#00ff00', '⚡');
         this.priority = 50;
+    }
+
+    getDemand(room) {
+        return EconomyManager.getDesiredUpgraders(room);
+    }
+
+    _getUsefulBodyUnits(room) {
+        return EconomyManager.getSpendingWorkParts(room);
     }
 
     _work(creep) {
@@ -31,7 +41,7 @@ class Upgrader extends RolePrototype {
             filter: structure => {
                 return (structure.structureType == STRUCTURE_STORAGE ||
                     structure.structureType == STRUCTURE_CONTAINER ||
-                    (structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == 'target')) &&
+                    (structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == constants.LINK_TYPE_TARGET)) &&
                     structure.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
             }
         }) : [];

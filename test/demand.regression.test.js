@@ -125,7 +125,7 @@ describe('Derived spawn demand', function () {
             addStructure(room, STRUCTURE_CONTAINER, 39, 39);
             room.memory.logistics = { tasks: [{ remaining: 100, state: 'open', resourceType: RESOURCE_ENERGY, retryAfter: 0 }] };
             const carry = EconomyManager.getHaulingCarryParts(room);
-            assert.equal(LogisticsManager.getDesiredWorkerCount(room, 'Storekeeper'), Math.min(config.ECONOMY.WORKERS_MAX, Math.ceil(carry / 5)));
+            assert.equal(LogisticsManager.getDesiredWorkerCount(room, 'Storekeeper'), Math.ceil(carry / Math.floor(800 / (BODYPART_COST[MOVE] + BODYPART_COST[CARRY]))), 'each one carries what the room can pay for');
             room.memory.logistics.tasks = [];
             assert.equal(LogisticsManager.getDesiredWorkerCount(room, 'Storekeeper'), 0);
         });

@@ -24,14 +24,24 @@ var RemoteHauler = require('./role.remoteHauler');
 
 var MemoryManager = require('./manager.memory');
 var MainCache = require('./main.cache');
-var LogisticsManager = require('./manager.logistics');
-var MineralManager = require('./manager.mineral');
+var EconomyManager = require('./manager.economy');
 var LabManager = require('./manager.lab');
+var MainHeap = require('./main.heap');
+var config = require('./main.config');
 
 class BaseManager {
 	
 	static runAll(allRoles = BaseManager.fetchAllRoles()) {
 	    MainUtil.findAllRooms().forEach(room => new BaseManager(room, allRoles).runBase());
+	}
+
+	static _guard(room, label, action) {
+		try {
+			action();
+		} catch (error) {
+			info.error('Could not ' + label + ' for ' + room.name + ': ' + error, room);
+			console.log(error.stack);
+		}
 	}
     
 	static fetchAllRoles() {
@@ -65,16 +75,17 @@ class BaseManager {
 
 	constructor(room, allRoles = BaseManager.fetchAllRoles()) {
 	    this._room = room;
-	    this._defaultRole = new Harvester();
 	    this._allRoles = allRoles;
 	    this._rolesByName = new Map(allRoles.map(role => [role.roleName, role]));
+	    this._defaultRole = this._rolesByName.get('Harvester') || new Harvester();
 	}
 
     runBase() {  
     	if (this._room.memory.base) {
-	        this._repopulateCreeps();
-	        this._showSpawningAnimation();
-	        this._moveCreeps();
+    		// a spawning problem must not stop the creeps we already have
+	        BaseManager._guard(this._room, 'spawn creeps', () => this._repopulateCreeps());
+	        BaseManager._guard(this._room, 'show spawning', () => this._showSpawningAnimation());
+	        BaseManager._guard(this._room, 'run creeps', () => this._moveCreeps());
     	}
     }
 
@@ -91,11 +102,21 @@ class BaseManager {
 
     	var harvester = this._rolesByName.get('Harvester') || this._defaultRole;
     	var upgrader = this._rolesByName.get('Upgrader');
+    	// these recovery rules ignore quotas, so they must not bring Harvesters back to a room that runs without them
+    	var selfSustaining = EconomyManager.isSelfSustaining(this._room);
     	var bootstrapRole = null;
-    	if (!homeCreeps.some(creep => creep.memory.role == 'Harvester')) {
+    	if (!selfSustaining && !homeCreeps.some(creep => creep.memory.role == 'Harvester')) {
     		bootstrapRole = harvester;
     	} else if (upgrader && !homeCreeps.some(creep => creep.memory.role == 'Upgrader')) {
     		bootstrapRole = upgrader;
+    	}
+    	if (bootstrapRole === harvester) {
+    		this._spawnCreepForRole(harvester);
+    		return;
+    	}
+    	var defender = this._rolesByName.get('Defender');
+    	if (defender && this._needsLocalDefenders(baseName) && this._spawnCreepForRole(defender)) {
+    		return;
     	}
     	if (bootstrapRole) {
     		this._spawnCreepForRole(bootstrapRole);
@@ -106,51 +127,95 @@ class BaseManager {
     	}
 
     	var activeHarvesters = homeCreeps.filter(creep => creep.memory.role == 'Harvester' && !creep.spawning);
-    	if (activeHarvesters.length === 1 && activeHarvesters[0].ticksToLive < 100) {
+    	var isLastHarvester = !selfSustaining && activeHarvesters.length === 1;
+    	if (isLastHarvester && activeHarvesters[0].ticksToLive < config.SPAWN.LAST_HARVESTER_TTL) {
     		this._spawnCreepForRole(harvester);
     		return;
     	}
-    	var preserveRecoveryReserve = activeHarvesters.length === 1;
+    	this._runSpawnQueue(baseName, isLastHarvester);
+    }
 
-    if (this._processMissionSpawnRequests(baseName, preserveRecoveryReserve)) {
-			return;
-		}
+    /*
+     * Everything that wants a creep goes through one queue with one priority scale: local roles
+     * first, then missions. The first request we can serve wins, and a request saving up for a
+     * full-size body holds the energy back from everything below it.
+     */
 
-	    var alreadySpawned = false;
-        this._allRoles.forEach(role => {
-        	if (alreadySpawned) return;
-            var foundNumber = MainCache.getCreepCount(baseName, role.roleName);
-            var requiredNumber = MemoryManager.getRequiredNumberForRoomAndRole(this._room, role.roleName);
-            if (role.roleName == 'Storekeeper' || role.roleName == 'Courier') {
-                var roleConfig = this._room.memory.base.roleConfig[role.roleName] || {};
-                var maxNumber = roleConfig.maxNumber === undefined ? (role.roleName == 'Storekeeper' ? 2 : 1) : roleConfig.maxNumber;
-                var desiredNumber = LogisticsManager.getDesiredWorkerCount(this._room, role.roleName);
-                requiredNumber = Math.max(requiredNumber, Math.min(desiredNumber, maxNumber));
-            }
-            if (role.roleName == 'MineralMiner') {
-                var mineralConfig = this._room.memory.base.roleConfig.MineralMiner || {};
-                var maxMiners = mineralConfig.maxNumber === undefined ? 1 : mineralConfig.maxNumber;
-                var desiredMiners = MineralManager.getDesiredMinerCount(this._room);
-                requiredNumber = Math.max(requiredNumber, Math.min(desiredMiners, maxMiners));
-            }
-            if (role.roleName == 'Defender') {
-                foundNumber = MainCache.getCreepsByHome(baseName).filter(creep => {
-                    return creep.memory.role === 'Defender' && !creep.memory.missionId;
-                }).length;
-                var defenderConfig = this._room.memory.base.roleConfig.Defender || {};
-                var maxDefenders = defenderConfig.maxNumber === undefined ? 2 : defenderConfig.maxNumber;
-                var desiredDefenders = this._room.memory.defense ? this._room.memory.defense.desiredDefenders || 0 : 0;
-                requiredNumber = Math.max(requiredNumber, Math.min(desiredDefenders, maxDefenders));
-            }
-            if (foundNumber < requiredNumber && role.isNecessary(this._room)) {
-            	if (preserveRecoveryReserve && role.roleName != 'Harvester' && this._room.energyAvailable < 450) {
-            		return;
-            	}
-                if (this._spawnCreepForRole(role)) {
-                	alreadySpawned = true;
-                }
-            }
-        });
+    _runSpawnQueue(baseName, preserveRecoveryReserve) {
+    	var waits = MainHeap.namespace('spawnWait');
+    	var queue = this._buildSpawnQueue(baseName);
+    	for (var request of queue) {
+    		var isHarvester = !request.entry && request.role.roleName == 'Harvester';
+    		if (preserveRecoveryReserve && !isHarvester && this._room.energyAvailable < this._getRecoveryReserve()) {
+    			continue;
+    		}
+    		var role = request.role;
+    		role._waitingForEnergy = false;
+    		role._spawnBaseName = baseName;
+    		// the first creep of a role that moves energy is what refills the spawn, so it cannot wait.
+    		// One that is only being replaced still can: its successor lives with this body for 1500 ticks
+    		role._mayWaitForEnergy = !(role.movesEnergy && !request.entry && this._countLivingCreeps(baseName, role) === 0);
+    		var spawned = false;
+    		try {
+    			spawned = request.entry ? this._spawnMissionRequest(request.entry) : this._spawnCreepForRole(role);
+    		} finally {
+    			role._mayWaitForEnergy = false;
+    		}
+    		if (spawned) {
+    			delete waits[baseName];
+    			return true;
+    		}
+    		if (role._waitingForEnergy) {
+    			return false;
+    		}
+    	}
+    	// nothing is saving up any more, so the next request gets its full wait
+    	delete waits[baseName];
+    	return false;
+    }
+
+    _buildSpawnQueue(baseName) {
+    	var queue = [];
+    	this._allRoles.forEach(role => {
+    		if (this._countActiveCreeps(baseName, role) >= this._getRequiredNumber(role)) return;
+    		if (!role.isNecessary(this._room)) return;
+    		queue.push({ role: role, priority: role.priority + config.SPAWN.LOCAL_PRIORITY_OFFSET });
+    	});
+    	this._collectMissionRequests(baseName).forEach(entry => {
+    		queue.push({ role: this._rolesByName.get(entry.request.role), entry: entry, priority: entry.request.priority || 0 });
+    	});
+    	return queue.sort((a, b) => b.priority - a.priority);
+    }
+
+    /*
+     * Manual quotas act as a floor over what the room derives for itself, so setCreepCount keeps
+     * working. maxNumber only limits the derived part.
+     */
+
+    _getRequiredNumber(role) {
+    	var manual = role.getManualQuota(this._room, MemoryManager.getRequiredNumberForRoomAndRole(this._room, role.roleName));
+    	if (!role.alwaysDerived && !EconomyManager.isAutomatic(this._room, role.roleName)) return manual;
+    	var roleConfig = this._room.memory.base.roleConfig[role.roleName] || {};
+    	var derived = role.getDemand(this._room);
+    	var maxNumber = roleConfig.maxNumber === undefined ? role.defaultMaxNumber : roleConfig.maxNumber;
+    	return Math.max(manual, maxNumber === undefined ? derived : Math.min(derived, maxNumber));
+    }
+
+    /*
+     * A creep about to expire no longer counts, which is what makes its replacement spawn in
+     * time. Mission creeps belong to their mission and never fill a local quota.
+     */
+
+    _countActiveCreeps(baseName, role) {
+    	return MainCache.getCreepsByHome(baseName).filter(creep => {
+    		return creep.memory.role === role.roleName && !creep.memory.missionId && !role.needsReplacement(creep);
+    	}).length;
+    }
+
+    _countLivingCreeps(baseName, role) {
+    	return MainCache.getCreepsByHome(baseName).filter(creep => {
+    		return creep.memory.role === role.roleName && !creep.memory.missionId && !creep.spawning;
+    	}).length;
     }
 
     _processMinerReplacements(baseName) {
@@ -192,15 +257,32 @@ class BaseManager {
         return false;
     }
 
-    _processMissionSpawnRequests(baseName, preserveRecoveryReserve) {
-        if (preserveRecoveryReserve && this._room.energyAvailable < 450) return false;
+    /*
+     * A room that cannot hold the full reserve may spend once it is full; otherwise
+     * nothing but Harvesters could ever spawn there and extensions would never be built.
+     */
+
+    _getRecoveryReserve() {
+        return Math.min(config.SPAWN.RECOVERY_ENERGY_RESERVE, this._room.energyCapacityAvailable);
+    }
+
+    _needsLocalDefenders(baseName) {
+        var defense = this._room.memory.defense;
+        if (!defense || !(defense.desiredDefenders > 0) || !(defense.threatLevel >= 2)) return false;
+        var localDefenders = MainCache.getCreepsByHome(baseName).filter(creep => {
+            return creep.memory.role === 'Defender' && !creep.memory.missionId;
+        }).length;
+        return localDefenders < defense.desiredDefenders;
+    }
+
+    _collectMissionRequests(baseName) {
         var requests = [];
         BaseManager._missionSpawnProviders.forEach((provider, providerName) => {
             try {
                 var produced = typeof provider === 'function'
                     ? provider(baseName, this._room)
                     : provider.getSpawnRequests(baseName, this._room);
-                (produced || []).slice(0, 100).forEach(request => {
+                (produced || []).slice(0, config.SPAWN.MISSION_REQUEST_LIMIT).forEach(request => {
                     if (request && request.home === baseName) requests.push({ request, provider, providerName });
                 });
             } catch (error) {
@@ -210,15 +292,12 @@ class BaseManager {
         requests.sort((a, b) => (b.request.priority || 0) - (a.request.priority || 0) ||
             (a.request.created || 0) - (b.request.created || 0) || String(a.request.id).localeCompare(String(b.request.id)));
         var seen = new Set();
-        for (var entry of requests) {
+        return requests.filter(entry => {
             var key = entry.request.id || entry.providerName + ':' + entry.request.role;
-            if (seen.has(key)) continue;
+            if (seen.has(key) || !this._rolesByName.has(entry.request.role)) return false;
             seen.add(key);
-            if (!this._rolesByName.has(entry.request.role)) continue;
-            var resultingCreep = this._spawnMissionRequest(entry);
-            if (resultingCreep) return true;
-        }
-        return false;
+            return true;
+        });
     }
 
     _spawnMissionRequest(entry) {
@@ -245,7 +324,8 @@ class BaseManager {
     		return;
     	}
     	this._room.memory.base.recoveryWarningAt = Game.time;
-    	info.warning('Emergency Harvester recovery needs a free eligible spawn with 200 available energy.', this._room);
+    	var recoveryCost = BODYPART_COST[WORK] + BODYPART_COST[CARRY] + BODYPART_COST[MOVE];
+    	info.warning('Emergency Harvester recovery needs a free eligible spawn with ' + recoveryCost + ' available energy.', this._room);
     }
 
     _spawnCreepForRole(role, options = {}) {    
@@ -303,12 +383,12 @@ class BaseManager {
                 creepRole.run(creep, this._room);
 
                 // Safe role counting with defensive checks against foreign or uninitialized rooms
-                if (creep.room.memory.roleInfo && creep.room.memory.roleInfo[creepRole.roleName]) {
-                	var currentNumber = creep.room.memory.roleInfo[creepRole.roleName].currentNumber;
-                	creep.room.memory.roleInfo[creepRole.roleName].currentNumber = currentNumber ? currentNumber + 1 : 1;
+                var roleInfo = MainHeap.namespace('roleInfo')[creep.room.name];
+                if (roleInfo && roleInfo[creepRole.roleName]) {
+                	roleInfo[creepRole.roleName].currentNumber++;
                 }
-                
-                if (this._room.memory.base && this._room.memory.base.roleConfig && this._room.memory.base.roleConfig.showIcons && this._room == creep.room) {
+
+                if (config.getSetting('creepIcons') && this._room.memory.base && this._room.memory.base.roleConfig && this._room.memory.base.roleConfig.showIcons && this._room == creep.room) {
                 	this._room.visual.text(creepRole.symbol, creep.pos.x, creep.pos.y, {align: 'left', opacity: 0.8});
                 }
             } catch (e) {
@@ -320,7 +400,7 @@ class BaseManager {
 
     _findNecessaryMandatoryRole(roleName) {
         var result = this._findMandatoryRole(roleName);
-        if (result.isNecessary(this._room)) {
+        if (this._isRoleNecessary(result)) {
         	return result;
         }
 
@@ -335,7 +415,16 @@ class BaseManager {
         }
 
         var fallback = this._rolesByName.get(fallbackName);
-        return fallback && fallback.isNecessary(this._room) ? fallback : result;
+        return fallback && this._isRoleNecessary(fallback) ? fallback : result;
+    }
+
+    // each role scans the room for work, so ask once per tick rather than once per creep
+    _isRoleNecessary(role) {
+        if (!this._necessaryRoles) this._necessaryRoles = new Map();
+        if (!this._necessaryRoles.has(role.roleName)) {
+            this._necessaryRoles.set(role.roleName, role.isNecessary(this._room));
+        }
+        return this._necessaryRoles.get(role.roleName);
     }
 
     _findMandatoryRole(roleName) {

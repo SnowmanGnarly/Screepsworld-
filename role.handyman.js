@@ -4,12 +4,17 @@
  
 var constants = require('./main.constants');
 var MainCache = require('./main.cache');
+var EconomyManager = require('./manager.economy');
 var RolePrototype = require('./role.prototype');
  
 class Handyman extends RolePrototype {
 
 	constructor() {
 		super('Handyman', '#0000ff', '🔧');
+	}
+
+	_getUsefulBodyUnits(room) {
+		return EconomyManager.getSpendingWorkParts(room);
 	}
 	
     _work(creep) {

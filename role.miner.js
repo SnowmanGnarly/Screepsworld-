@@ -3,9 +3,11 @@
  * So have a container or storage ready for him to use.
  */
 
+var constants = require('./main.constants');
 var info = require('./main.info');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
+var EconomyManager = require('./manager.economy');
 
 var RolePrototype = require('./role.prototype');
 
@@ -13,8 +15,9 @@ class Miner extends RolePrototype {
 
 	constructor() {
 		super('Miner', '#000000', '🛒');
-		this.priority = -1; // we never need more than the defined miners
+		this.priority = 85; // income comes before everything that spends it
 		this._maxRangeToTarget = 7;
+		this._disableAutomaticLoot = true; // a Miner stays on its source; haulers collect the piles
 
 		this._targetMode = RolePrototype.TARGET_MODE_USE_OR_WAIT;
 	}
@@ -23,13 +26,23 @@ class Miner extends RolePrototype {
 		return true;
 	}
 
+	getDemand(room) {
+		return EconomyManager.getDesiredMiners(room);
+	}
+
+	// Miners time their own replacement in _work(), from the walk they actually measured
+	needsReplacement(creep) {
+		return false;
+	}
+
 	/*
 	 * This method is called by the framework, so we need to find an open
 	 * source for the creep to attach to.
 	 */
 
 	spawnCreep(spawn) {
-		var allSources = MainCache.find(spawn.room, FIND_SOURCES);
+		var minableSources = EconomyManager.getMinableSources(spawn.room);
+		var allSources = minableSources.length > 0 ? minableSources : MainCache.find(spawn.room, FIND_SOURCES);
 		var targetSource = null;
 		var minMinerCount = Infinity;
 
@@ -84,7 +97,8 @@ class Miner extends RolePrototype {
 
 	_getPartsMaxMultiplier(spawn) {
 		var controller = spawn.room.controller;
-		return controller && (controller.my || controller.reservation) ? 5 : 6;
+		var sourceParts = EconomyManager.getHarvestWorkParts();
+		return controller && (controller.my || controller.reservation) ? sourceParts : sourceParts + 1;
 	}
 
 	_work(creep) {
@@ -101,16 +115,18 @@ class Miner extends RolePrototype {
 		// we know how long it took this creep to the resource
 		// so we need to retrain our replacement before we die
 		if (creep.memory.ticksToSource && !creep.memory.trainedReplacement) {
-			var timeToSpawn = creep.body.length * 3;
+			var timeToSpawn = creep.body.length * CREEP_SPAWN_TIME;
 			var ticksToGetReady = (creep.memory.initialTicksToLive - creep.memory.ticksToSource) + timeToSpawn;
 
 			if (creep.ticksToLive < ticksToGetReady) {
 				if (!Memory.minerReplacements) Memory.minerReplacements = {};
-				Memory.minerReplacements[creep.name] = {
-					home: creep.memory.home,
-					sourceId: creep.memory.source,
-					created: Game.time,
-				};
+				if (!Memory.minerReplacements[creep.name]) {
+					Memory.minerReplacements[creep.name] = {
+						home: creep.memory.home,
+						sourceId: creep.memory.source,
+						created: Game.time,
+					};
+				}
 			}
 		}
 	}
@@ -143,7 +159,7 @@ class Miner extends RolePrototype {
 			filter: (structure) => {
 				return (structure.structureType == STRUCTURE_STORAGE ||
 					structure.structureType == STRUCTURE_CONTAINER ||
-					(structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == 'source')) &&
+					(structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == constants.LINK_TYPE_SOURCE)) &&
 					(!testCreepPosition || this.creep.pos.inRangeTo(structure, this._maxRangeToTarget)) &&
 					structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
 			}

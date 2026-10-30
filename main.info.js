@@ -2,6 +2,7 @@
  * This module is used to display some information to the screen, so debugging is easier.
  */
  
+var MainHeap = require('./main.heap');
 var MainUtil = require('./main.util');
 
 class MainInfo {
@@ -24,7 +25,8 @@ class MainInfo {
 	 */
     
 	static _visualizeRoleInfos(room) {   
-        if (!room.memory.roleInfo)
+        var roleInfo = MainHeap.namespace('roleInfo')[room.name];
+        if (!roleInfo)
             return;
 
     	var console = MainInfo._fetchMemoryOfRoomConsole(room);
@@ -36,8 +38,8 @@ class MainInfo {
         
         var unusedRoles = '';
         
-        for (const role in room.memory.roleInfo) {
-            var count = room.memory.roleInfo[role];
+        for (const role in roleInfo) {
+            var count = roleInfo[role];
             if (count.currentNumber || (count.requiredNumber > 0)) {
             	var ofRequired = count.requiredNumber >= 0 ? '/' + count.requiredNumber : '';
                 room.visual.text(count.symbol + ' ' + role + ' ' + count.currentNumber + ofRequired, x, y++, {align: 'left', opacity: console.opacity});

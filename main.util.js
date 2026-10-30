@@ -39,6 +39,16 @@ class MainUtil {
 	}
 
 	/*
+	 * Returns true for the 'Remote' and 'Remote:...' flags that configure remote missions.
+	 *
+	 * @param flag
+	 */
+
+	static isRemoteFlag(flag) {
+	    return /^remote(?:$|:)/i.test(flag.name);
+	}
+
+	/*
 	 * Returns the display name of a game object.
 	 * 
 	 * @param game object
@@ -79,8 +89,8 @@ class MainUtil {
 		}
 		var memory = Memory.structures[structure.id];
 		structure.memory = memory;
-		memory._roomName = structure.room && structure.room.name ? structure.room.name : structure.pos && structure.pos.roomName;
-		memory._lastSeen = Game.time;
+		var roomName = structure.room && structure.room.name ? structure.room.name : structure.pos && structure.pos.roomName;
+		if (memory._roomName !== roomName) memory._roomName = roomName;
 		return memory;
 	}
 

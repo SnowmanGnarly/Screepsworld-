@@ -3,6 +3,7 @@
  */
 
 var RolePrototype = require('./role.prototype');
+var EconomyManager = require('./manager.economy');
 var LogisticsManager = require('./manager.logistics');
 var LogisticsRunner = require('./logistics.runner');
 
@@ -10,8 +11,14 @@ class StoreKeeper extends RolePrototype {
 
     constructor() {
         super('Storekeeper', '#ff9900', '🏭');
-        this.priority = 60;
+        this.priority = 75;
+        this.movesEnergy = true;
+        this.alwaysDerived = true; // limited by maxNumber, never switched off with the other roles
         this._disableAutomaticLoot = true;
+    }
+
+    getDemand(room) {
+        return LogisticsManager.getDesiredWorkerCount(room, this.roleName);
     }
 
     isNecessary(room) {
@@ -20,6 +27,10 @@ class StoreKeeper extends RolePrototype {
 
     spawnCreep(spawn) {
         return this._spawnCreepWithParts(spawn, [MOVE, CARRY]);
+    }
+
+    _getUsefulBodyUnits(room) {
+        return EconomyManager.getStorekeeperCarryParts(room);
     }
 
     _work(creep) {

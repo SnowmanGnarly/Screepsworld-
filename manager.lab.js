@@ -1,4 +1,5 @@
 var MainCache = require('./main.cache');
+var MainHeap = require('./main.heap');
 var MainUtil = require('./main.util');
 var TerminalManager = require('./manager.terminal');
 var info = require('./main.info');
@@ -20,7 +21,7 @@ class LabManager {
         this._room = room;
         this._memory = LabManager.getConfig(room);
         this._goals = LabManager._normalizeGoals(this._memory.goals);
-        this._recipes = LabManager.buildRecipeIndex();
+        this._recipes = MainHeap.cached('labRecipes', undefined, () => LabManager.buildRecipeIndex());
         this._labs = MainCache.find(room, FIND_MY_STRUCTURES, {
             filter: structure => structure.structureType === STRUCTURE_LAB,
         }).slice().sort((a, b) => a.id.localeCompare(b.id));

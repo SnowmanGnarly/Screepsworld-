@@ -27,7 +27,7 @@ class Explorer extends RolePrototype {
 	}
 
 	_findTargets(room) {
-	    return MainUtil.findAllFlags().slice();
+	    return MainUtil.findAllFlags().filter(flag => !MainUtil.isRemoteFlag(flag));
 	}
 	
 	spawnCreep(spawn) {
@@ -35,7 +35,7 @@ class Explorer extends RolePrototype {
 			.filter(creep => creep.memory.role == 'Explorer')
 			.map(creep => creep.memory.targetFlag || creep.memory.target)
 			.filter(flagName => !!flagName);
-		var allFlags = MainUtil.findAllFlags().filter(flag => !claimedFlags.includes(flag.name));
+		var allFlags = this._findTargets(spawn.room).filter(flag => !claimedFlags.includes(flag.name));
 		if (allFlags.length > 0)
 			return this._spawnCreepFromSpawn(spawn, allFlags[0].name);
 		return false;

@@ -3,6 +3,7 @@
 var MainCache = require('./main.cache');
 var LogisticsManager = require('./manager.logistics');
 var info = require('./main.info');
+var config = require('./main.config').LOGISTICS;
 
 class LogisticsRunner {
 
@@ -46,7 +47,7 @@ class LogisticsRunner {
         var available = LogisticsManager.getResourceAmount(source, task.resourceType);
         var amount = Math.min(available, task.remaining, (creep.store.getFreeCapacity(task.resourceType) || 0));
         if (amount <= 0) {
-            task.retryAfter = Game.time + 5;
+            task.retryAfter = Game.time + config.RETRY_TICKS;
             return;
         }
 
@@ -123,7 +124,7 @@ class LogisticsRunner {
      * @param {number} result
      */
     static _retry(task, result) {
-        task.retryAfter = Game.time + 5;
+        task.retryAfter = Game.time + config.RETRY_TICKS;
         task.state = 'open';
         if (result !== ERR_BUSY && result !== ERR_NOT_ENOUGH_RESOURCES && result !== ERR_TIRED) {
             info.warning('Logistics task ' + task.id + ' could not continue: ' + result);

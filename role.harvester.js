@@ -2,8 +2,11 @@
  * Harvesters collect resources that can be used to do stuff.
  */
 
+var constants = require('./main.constants');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
+var EconomyManager = require('./manager.economy');
+var LogisticsManager = require('./manager.logistics');
 
 var RolePrototype = require('./role.prototype');
 
@@ -12,7 +15,27 @@ class Harvester extends RolePrototype {
     constructor() {
         super('Harvester', '#ffffff', '🧺');
         this.priority = 100;
+        this.movesEnergy = true;
         this._sourceMode = RolePrototype.SOURCE_MODE_USE_IF_VALID;
+    }
+
+    getDemand(room) {
+        return EconomyManager.getDesiredHarvesters(room);
+    }
+
+    /*
+     * The Mayor stores a quota of 1 for every room, so 1 says nothing about what the operator wants.
+     * A higher number, or a count set with setCreepCount, does.
+     */
+
+    getManualQuota(room, manual) {
+        var roleConfig = room.memory.base.roleConfig[this.roleName] || {};
+        var isDefault = manual === 1 && !roleConfig.pinned && EconomyManager.isAutomatic(room, this.roleName);
+        return isDefault && EconomyManager.isSelfSustaining(room) ? 0 : manual;
+    }
+
+    _getUsefulBodyUnits(room) {
+        return EconomyManager.getHarvestWorkParts();
     }
 
     spawnCreep(spawn, options = {}) {
@@ -40,12 +63,14 @@ class Harvester extends RolePrototype {
     }
 
     _findTargets(room) {
+        const claimedTargets = LogisticsManager.getClaims(room).targets;
         const structures = MainCache.find(room, FIND_MY_STRUCTURES, {
             filter: (structure) => {
+                if (claimedTargets.has(structure.id)) return false;
                 return (structure.structureType == STRUCTURE_EXTENSION ||
                     structure.structureType == STRUCTURE_SPAWN ||
                     structure.structureType == STRUCTURE_STORAGE ||
-                    (structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == 'source') ||
+                    (structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == constants.LINK_TYPE_SOURCE) ||
                     structure.structureType == STRUCTURE_TOWER) &&
                     structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0;
             }

@@ -3,6 +3,7 @@
  */
 
 var constants = require('./main.constants');
+var config = require('./main.config');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
 var DefenseManager = require('./manager.defense');
@@ -41,7 +42,7 @@ class TowerManager {
 
     _findEmergencyRepairs() {
         var lowRamparts = MainCache.find(this._room, FIND_MY_STRUCTURES, {
-            filter: structure => structure.structureType === STRUCTURE_RAMPART && structure.hits < 10000
+            filter: structure => structure.structureType === STRUCTURE_RAMPART && structure.hits < config.DEFENSE.EMERGENCY_RAMPART_HITS
         });
         if (lowRamparts.length > 0) return lowRamparts;
 

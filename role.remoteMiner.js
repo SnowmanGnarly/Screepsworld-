@@ -63,7 +63,7 @@ class RemoteMiner extends RolePrototype {
         var site = sites[0];
         var result = creep.build(site);
         if (result === ERR_NOT_IN_RANGE) this._moveToLocation(creep, site);
-        if (result === OK && site.progress + creep.getActiveBodyparts(WORK) * 5 >= site.progressTotal) {
+        if (result === OK && site.progress + creep.getActiveBodyparts(WORK) * BUILD_POWER >= site.progressTotal) {
             MainCache.invalidateRoom(creep.room, FIND_CONSTRUCTION_SITES);
             MainCache.invalidateRoom(creep.room, FIND_MY_CONSTRUCTION_SITES);
         }

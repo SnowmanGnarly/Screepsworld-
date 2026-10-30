@@ -81,7 +81,7 @@ class RemoteManager {
     static _importFlags() {
         var baseRooms = MainUtil.findAllRooms().filter(room => room.memory.base && room.memory.base.name);
         MainUtil.findAllFlags().forEach(flag => {
-            if (!/^remote(?:$|:)/i.test(flag.name)) return;
+            if (!MainUtil.isRemoteFlag(flag)) return;
             var parts = flag.name.split(':');
             var home = null;
             var targetRoom = flag.pos.roomName;
@@ -131,6 +131,11 @@ class RemoteManager {
         mission.enabled = mission.enabled !== false;
         mission.status = mission.status || 'active';
         mission.maxDistance = this._clamp(mission.maxDistance, 1, 10, RemoteManager.DEFAULT_MAX_DISTANCE);
+        // missions saved before the cap became a safety ceiling hold the old default
+        if (mission.haulerCapVersion !== RemoteManager.HAULER_CAP_VERSION) {
+            if (mission.maxHaulers === RemoteManager.LEGACY_DEFAULT_MAX_HAULERS) mission.maxHaulers = RemoteManager.DEFAULT_MAX_HAULERS;
+            mission.haulerCapVersion = RemoteManager.HAULER_CAP_VERSION;
+        }
         mission.maxHaulers = this._clamp(mission.maxHaulers, 0, RemoteManager.MAX_HAULERS_PER_OUTPOST, RemoteManager.DEFAULT_MAX_HAULERS);
         mission.maxSites = this._clamp(mission.maxSites, 0, RemoteManager.MAX_SITES_PER_OUTPOST, RemoteManager.DEFAULT_MAX_SITES);
         mission.sources = Array.isArray(mission.sources) ? mission.sources.slice(0, 8) : [];
@@ -206,7 +211,7 @@ class RemoteManager {
             this._addDefenseRequest(mission, requests);
             if (mission.defense.threatLevel >= 2) return;
             this._addScoutRequest(mission, requests);
-            this._addReserverRequest(mission, requests);
+            this._addReserverRequest(mission, requests, baseRoom);
             this._addEconomyRequests(mission, baseRoom, requests);
         });
         return requests.slice(0, RemoteManager.MAX_SPAWN_REQUESTS_PER_HOME);
@@ -233,7 +238,7 @@ class RemoteManager {
         }, 'scout'));
     }
 
-    static _addReserverRequest(mission, requests) {
+    static _addReserverRequest(mission, requests, baseRoom) {
         if (!mission.reserve || mission.sources.length === 0) return;
         var controller = mission.controller;
         if (controller && controller.owner && !controller.my) return;
@@ -241,17 +246,31 @@ class RemoteManager {
         if (controller && controller.reservation && controller.reservation.username !== username) return;
         if (controller && controller.reservation && controller.reservation.username === username &&
             controller.reservation.ticksToEnd >= RemoteManager.RESERVATION_THRESHOLD) return;
-        if (this._getMissionCreeps(mission, 'Reserver').some(creep => !creep.memory.retiring)) return;
-        requests.push(this._makeRequest(mission, 'Reserver', 75, [CLAIM, MOVE], {
+        var body = this.getReserverBody(baseRoom);
+        if (this._getMissionCreeps(mission, 'Reserver').some(creep => {
+            return !creep.memory.retiring && !this._needsReplacement(creep, mission, body);
+        })) return;
+        requests.push(this._makeRequest(mission, 'Reserver', 75, body, {
             controllerPos: this._getControllerPos(mission),
         }, 'reserve'));
+    }
+
+    /*
+     * A reservation decays by one per tick and each CLAIM part adds one, so a single
+     * part only holds the reservation still. Two parts are what make it grow.
+     */
+
+    static getReserverBody(baseRoom) {
+        var body = [CLAIM, CLAIM, MOVE, MOVE];
+        var capacity = baseRoom && baseRoom.energyCapacityAvailable || 0;
+        return capacity >= this._bodyCost(body) ? body : [CLAIM, MOVE];
     }
 
     static _addEconomyRequests(mission, baseRoom, requests) {
         if (mission.sources.length === 0) return;
         var activeMiners = this._getMissionCreeps(mission, 'RemoteMiner');
         mission.sources.forEach(source => {
-            var body = this.getMinerBody(mission, source);
+            var body = this.getMinerBody(mission, source, baseRoom);
             var current = activeMiners.filter(creep => {
                 return (creep.memory.sourceId || creep.memory.source) === source.id &&
                     !this._needsReplacement(creep, mission, body);
@@ -269,6 +288,10 @@ class RemoteManager {
         var currentHaulers = this._getMissionCreeps(mission, 'RemoteHauler').filter(creep => {
             return !this._needsReplacement(creep, mission, demand.body);
         }).length;
+        if (demand.rawHaulers > demand.haulers && Game.time - (mission.haulerCapWarnedAt || 0) >= RemoteManager.HAULER_CAP_WARNING_INTERVAL) {
+            mission.haulerCapWarnedAt = Game.time;
+            info.warning('Remote ' + mission.targetRoom + ' needs ' + demand.rawHaulers + ' haulers but maxHaulers is ' + demand.haulers, baseRoom);
+        }
         if (currentHaulers >= demand.haulers) return;
         var anchor = mission.sources[0];
         requests.push(this._makeRequest(mission, 'RemoteHauler', 60, demand.body, {
@@ -321,15 +344,25 @@ class RemoteManager {
     static _needsReplacement(creep, mission, body) {
         if (creep.spawning) return false;
         if (creep.memory.trainedReplacement) return true;
-        var leadTime = (mission.travelTicks || RemoteManager.DEFAULT_TRAVEL_TICKS) + body.length * 3 + RemoteManager.REPLACEMENT_BUFFER;
+        var leadTime = (mission.travelTicks || RemoteManager.DEFAULT_TRAVEL_TICKS) + body.length * CREEP_SPAWN_TIME + RemoteManager.REPLACEMENT_BUFFER;
         return Number.isFinite(creep.ticksToLive) && creep.ticksToLive <= leadTime;
     }
 
-    static getMinerBody(mission, source) {
+    static _getSourceOutput(source, reserved) {
+        if (source.output) return source.output;
+        if (source.energyCapacity) return source.energyCapacity / ENERGY_REGEN_TIME;
+        return (reserved ? SOURCE_ENERGY_CAPACITY : SOURCE_ENERGY_NEUTRAL_CAPACITY) / ENERGY_REGEN_TIME;
+    }
+
+    static getMinerBody(mission, source, baseRoom) {
         var reserved = mission.controller && mission.controller.reservation &&
             mission.controller.reservation.username === this._getOwnUsername(mission);
-        var output = source.output || (source.energyCapacity ? source.energyCapacity / 300 : 0) || (reserved ? 10 : 5);
-        var workParts = this._clamp(Math.ceil(output / 2), 3, 5, 3);
+        var output = this._getSourceOutput(source, reserved);
+        var workParts = this._clamp(Math.ceil(output / HARVEST_POWER), 3, 5, 3);
+        if (baseRoom && baseRoom.energyCapacityAvailable) {
+            var affordableWork = Math.floor((baseRoom.energyCapacityAvailable - BODYPART_COST[CARRY] - BODYPART_COST[MOVE]) / BODYPART_COST[WORK]);
+            workParts = Math.max(1, Math.min(workParts, affordableWork));
+        }
         var body = [];
         for (var index = 0; index < workParts; index++) body.push(WORK);
         body.push(CARRY, MOVE);
@@ -340,7 +373,8 @@ class RemoteManager {
         var homeRoom = baseRoom || mission.homeRoom && Game.rooms[mission.homeRoom];
         var energyCapacity = homeRoom && homeRoom.energyCapacityAvailable || 300;
         var configuredPairs = this._clamp(mission.haulerPairs, 1, 6, RemoteManager.DEFAULT_HAULER_PAIRS);
-        var pairs = Math.max(1, Math.min(configuredPairs, Math.floor(energyCapacity / 150)));
+        var pairCost = this._bodyCost([CARRY, CARRY, MOVE]);
+        var pairs = Math.max(1, Math.min(configuredPairs, Math.floor(energyCapacity / pairCost)));
         var body = [];
         for (var index = 0; index < pairs; index++) body.push(CARRY, CARRY, MOVE);
         return body;
@@ -352,21 +386,21 @@ class RemoteManager {
         var reserved = mission.controller && mission.controller.reservation &&
             mission.controller.reservation.username === this._getOwnUsername(mission);
         var outputPerTick = sources.reduce((sum, source) => {
-            var output = source.output || (source.energyCapacity ? source.energyCapacity / 300 : 0) || (reserved ? 10 : 5);
-            return sum + this._clamp(output, 0, 20, 5);
+            return sum + this._clamp(this._getSourceOutput(source, reserved), 0, 20, 5);
         }, 0);
         var distance = mission.distance === null || mission.distance === undefined ? 1 : mission.distance;
         var travelTicks = this._clamp(context.travelTicks || mission.travelTicks || distance * 50,
             20, RemoteManager.MAX_TRAVEL_TICKS, RemoteManager.DEFAULT_TRAVEL_TICKS);
-        var roundTripTicks = this._clamp(travelTicks * 2 + 20, 40, 1500, 120);
+        var roundTripTicks = this._clamp(travelTicks * 2 + 20, 40, CREEP_LIFE_TIME, 120);
         var body = context.body || this.getHaulerBody(mission, context.baseRoom);
         var carryParts = body.filter(part => part === CARRY).length;
-        var capacity = Math.max(50, carryParts * 50);
+        var capacity = Math.max(CARRY_CAPACITY, carryParts * CARRY_CAPACITY);
         var rawHaulers = outputPerTick > 0 ? Math.ceil(outputPerTick * roundTripTicks / capacity) : 0;
         var haulers = this._clamp(rawHaulers, 0, mission.maxHaulers, 0);
         return {
             miners: sources.length,
             haulers: haulers,
+            rawHaulers: rawHaulers,
             outputPerTick: this._clamp(outputPerTick, 0, 100, 0),
             travelTicks: travelTicks,
             roundTripTicks: roundTripTicks,
@@ -555,8 +589,11 @@ class RemoteManager {
 }
 
 RemoteManager.DEFAULT_MAX_DISTANCE = 1;
-RemoteManager.DEFAULT_MAX_HAULERS = 3;
-RemoteManager.MAX_HAULERS_PER_OUTPOST = 4;
+RemoteManager.DEFAULT_MAX_HAULERS = 8;
+RemoteManager.MAX_HAULERS_PER_OUTPOST = 12;
+RemoteManager.LEGACY_DEFAULT_MAX_HAULERS = 3;
+RemoteManager.HAULER_CAP_VERSION = 2;
+RemoteManager.HAULER_CAP_WARNING_INTERVAL = 1000;
 RemoteManager.DEFAULT_MAX_SITES = 2;
 RemoteManager.MAX_SITES_PER_OUTPOST = 4;
 RemoteManager.MAX_DEFENDERS_PER_OUTPOST = 2;

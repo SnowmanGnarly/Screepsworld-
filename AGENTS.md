@@ -83,8 +83,9 @@ Although most files have `checkJs` disabled globally, `logistics.runner.js` opts
 | `main.scheduler.js` | Runs the job table: per-job error isolation, CPU tiers, and cadence. |
 | `main.config.js` | Named policy values grouped by subsystem, and console settings. |
 | `main.heap.js` | Bounded storage for plain data that lives until a global reset. |
-| `main.move.js` | The one place creeps get move orders: path reuse, stuck detection, and optional path visuals. |
-| `manager.economy.js` | Derives creep counts from source output, route length, stored energy, and open construction. |
+| `main.move.js` | The one place creeps get move orders: a stored path per walk on the heap, stuck detection, and optional path visuals. |
+| `main.mincut.js` | Finds the fewest tiles that close a protected area off from the exits. Terrain only, no game state. |
+| `manager.economy.js` | Derives creep counts and body sizes from source output, route length, stored energy, and open construction, and decides when a room sustains itself. |
 | `main.cache.js` | Per-tick snapshots of rooms, spawns, creeps, flags, role/home counts, spawn reservations, `room.find` results, and per-tick memos. |
 | `main.util.js` | Cached global collection accessors, display names, and persistent structure-memory adapter. |
 | `main.info.js` | Console logging and per-room visual displays; stores room names, not live room objects, in log history. |
@@ -116,7 +117,7 @@ All ordinary roles extend `role.prototype.js` and are registered in `BaseManager
 
 | Role | Behavior |
 | --- | --- |
-| `role.harvester.js` | Early-game energy bootstrap; fills core structures and can upgrade the controller. Highest normal spawn priority. |
+| `role.harvester.js` | Bootstrap and recovery economy; fills core structures and can upgrade the controller. Not replaced once Miners and a Storekeeper run the room. Highest normal spawn priority. |
 | `role.miner.js` | Source-assigned static mining, nearby container/storage/link delivery, and timed replacement requests. |
 | `role.miner.mineral.js` | Harvests an assigned RCL 6+ mineral when its built extractor, regeneration, and hub capacity permit; keeps mining across extractor cooldowns and delivers when full or once the mineral is depleted or unavailable. |
 | `role.storekeeper.js` | WORK-less, energy-only logistics worker using `LogisticsRunner`. |
@@ -131,7 +132,7 @@ All ordinary roles extend `role.prototype.js` and are registered in `BaseManager
 | `role.remoteMiner.js` | Mines an assigned outpost source, builds nearby sites, and delivers or drops energy. |
 | `role.remoteHauler.js` | Carries remote energy to home storage/terminal and recovers foreign cargo. |
 
-`RolePrototype` supplies target/source selection, commuting, persisted-coordinate room travel, automatic nearby looting, manual move/recycle overrides, error handling, exact mission bodies, body generation, and shared spawn-time boost preflight. Body generation respects available energy, role multipliers, and the 50-part creep limit. Boost policies are opt-in; required policies wait for a fully stocked lab plan, optional policies spawn unboosted, and emergency Harvester recovery bypasses boost requirements. Roles commonly override `isNecessary()`, `spawnCreep()`, `_findTargets()`, `_findSources()`, and `_work()`.
+`RolePrototype` supplies target/source selection, commuting, persisted-coordinate room travel, nearby looting for rooms without haulers, manual move/recycle overrides, error handling, exact mission bodies, body generation, and shared spawn-time boost preflight. Body generation respects available energy, role multipliers, and the 50-part creep limit. Boost policies are opt-in; required policies wait for a fully stocked lab plan, optional policies spawn unboosted, and emergency Harvester recovery bypasses boost requirements. Roles commonly override `isNecessary()`, `spawnCreep()`, `_findTargets()`, `_findSources()`, and `_work()`.
 
 Role instances are created once per global reset and shared across creeps and ticks. Do not add per-creep or per-tick state to role instance fields beyond what `run()` resets; durable state belongs in Screeps `Memory`.
 
@@ -143,7 +144,7 @@ A base is a logical construct keyed by `room.memory.base.name`, not simply every
 
 Important persistent locations include:
 
-- `room.memory.base.roleConfig`: quotas, body multipliers, source policy, and display options.
+- `room.memory.base.roleConfig`: quotas, an optional `partsMaxMultiplier` limit over derived body sizes, source policy, and display options. `pinned` marks a count set with `setCreepCount`, which the Harvester quota needs because the Mayor stores a default of 1.
 - `room.memory.logistics`: task queue, queue version, overflow count, and optional stock policy.
 - `room.memory.defense`, `room.memory.mayor`, `room.memory.roomManager`, `room.memory.roadManager`, `room.memory.console`, and `room.memory.cpu`.
 - `Memory.structures`: persistent structure metadata with `_roomName` and `_lastSeen`.
@@ -166,7 +167,7 @@ Storekeepers accept only energy tasks; Couriers accept any resource. Preserve of
 
 ### Construction and defense safeguards
 
-Mayor defaults to automatic operation but supports `off`, `warn`, and `auto` modes. Nuker construction and wall/rampart fortification are explicitly opt-in through `room.memory.mayor`. Layout generation overwrites the existing editable layout.
+Mayor defaults to automatic operation but supports `off`, `warn`, and `auto` modes. With `enableFortification` on, RCL 4 or higher, and a healthy bucket, the room plans one minimum-cut rampart line around its buildings (`roomManager.rampartPlanVersion`) and builds it after everything else. Nuker construction and wall/rampart fortification are explicitly opt-in through `room.memory.mayor`. Layout generation overwrites the existing editable layout.
 
 Defense and towers share `DefenseManager.getPriorityTarget()` / `getTowerPlan()`. Keep target selection, healing estimates, per-room notification throttling, tower energy reserves, and safe-mode vulnerability checks coordinated rather than reimplementing them independently.
 
@@ -197,9 +198,13 @@ Tests are local Mocha tests using Node assertions; they do not connect to a Scre
 - `test/boost.regression.test.js`: boost preflight, resource costs, reservations, multi-lab movement, cleanup, emergency bypass, and outsourced spawning.
 - `test/hardening.regression.test.js`: healing estimates, recovery reserve, layout top-up, job isolation and tiers, CPU history, heap and Memory rules, movement, work claims, and the base planner.
 - `test/demand.regression.test.js`: derived demand, the spawn queue, energy reservation, pre-spawn, and a new room reaching RCL 4 with no console commands.
+- `test/lifetime.regression.test.js`: runs a growing room with every game object rebuilt between ticks, so anything kept across ticks throws.
+- `test/movement.regression.test.js`: the heap path cache, its fallbacks, and stuck handling.
+- `test/assignment.regression.test.js`: Harvesters only during bootstrap, looting through the queue, and derived bodies.
+- `test/mincut.regression.test.js`: the minimum cut itself, checked by walking out of the result, and rampart planning.
 - `test/syntax.test.js`: syntax-checks every root-level `.js` file.
 
-Use `test/helpers/screeps.js` for new tests. Call `resetScreeps()` before each case, normally in `beforeEach`, to install globals and reset `Game`, `Memory`, and `MainCache`. Build rooms/objects with `makeRoom`, `makeStructure`, `makeCreep`, `makeSpawn`, `makeStore`, and `makeLab`; populate `room.find` results with `setFind`; and call `registerObject` for anything that must be reachable through `Game.getObjectById`.
+Use `test/helpers/screeps.js` for new tests. For multi-tick tests, call `rebuildGameObjects()` between ticks and fetch objects from `Game` again afterwards; it does what the engine does, and old instances throw when read. Call `resetScreeps()` before each case, normally in `beforeEach`, to install globals and reset `Game`, `Memory`, and `MainCache`. Build rooms/objects with `makeRoom`, `makeStructure`, `makeCreep`, `makeSpawn`, `makeStore`, and `makeLab`; populate `room.find` results with `setFind`; and call `registerObject` for anything that must be reachable through `Game.getObjectById`.
 
 The mocks implement only the Screeps behavior currently needed by the suite. Extend them deliberately when testing a new API, and clean up any additional global state a test installs. For behavior fixes, add a regression test that exercises the real manager/role method, not just an import or syntax check. Finish with `npm test`.
 
@@ -211,7 +216,7 @@ No automated deployment process or CI configuration is present in this repositor
 
 - Creep operations: `fetchOldestCreep`, `spawnCreepForRoom`, `spawnMiner`, `spawnExplorer`, `selfdestruct`, and `moveCreepTo`.
 - Quotas: `setCreepCount` and `setMultipleCreepCounts`. These set a floor over the demand the room derives.
-- Settings and CPU: `setSetting` (`visuals`, `pathVisuals`, `creepIcons`) and `cpuReport`.
+- Settings and CPU: `setSetting` (`visuals`, `pathVisuals`, `creepIcons`), `cpuReport`, and `version`.
 - Links: `makeLinkSource` and `makeLinkTarget`.
 - Layout/UI: `generateLayoutForRoom` and `clearConsole`.
 

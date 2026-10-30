@@ -32,7 +32,8 @@ Creep counts are derived from the room: Miners from sources with a container or 
 | `main.scheduler.js` | Runs the job table: per-job error isolation, CPU tiers, and cadence. |
 | `main.config.js` | Named policy values grouped by subsystem, and console settings. |
 | `main.heap.js` | Bounded storage for plain data that lives until a global reset. |
-| `main.move.js` | The one place creeps get move orders: path reuse, stuck detection, and optional path visuals. |
+| `main.move.js` | The one place creeps get move orders: a stored path per walk on the heap, stuck detection, and optional path visuals. |
+| `main.mincut.js` | Finds the fewest tiles that close a protected area off from the exits. Terrain only, no game state. |
 | `main.cache.js` | Per-tick snapshots of rooms, spawns, creeps, flags, role/home counts, spawn reservations, and cached `room.find` results. |
 | `main.util.js` | Cached global collection accessors, display names, and the persistent structure-memory adapter (`Memory.structures`). |
 | `main.info.js` | Console logging and per-room visual displays. |
@@ -43,7 +44,7 @@ Creep counts are derived from the room: Miners from sources with a container or 
 | File | Responsibility |
 | --- | --- |
 | `manager.base.js` | Role registry, recovery, Miner replacement, the single spawn queue (local roles above missions, energy reservation, generic pre-spawn), declarative mission spawn providers, outsourced spawning, and boost-aware dispatch. |
-| `manager.economy.js` | Derives creep counts from source output, route length, stored energy, and open construction. |
+| `manager.economy.js` | Derives creep counts and body sizes from source output, route length, stored energy, and open construction, and decides when a room sustains itself. |
 | `manager.memory.js` | Initializes base/spawn/role and empire memory, removes dead-creep and stale visible-structure memory, samples `RawMemory` size. |
 | `manager.intel.js` | Bounded, versioned `Memory.empire` with normalized intel, missions, squads, and reserved alliance storage. |
 | `manager.remote.js` | Explicit outpost configuration, route demand/ROI, suspension/blacklist metadata, mission spawning, and capped construction. |
@@ -76,7 +77,7 @@ All roles extend `RolePrototype` and are registered in `BaseManager.fetchAllRole
 
 | File | Behavior |
 | --- | --- |
-| `role.harvester.js` | Early-game energy bootstrap; fills core structures and can upgrade the controller. Highest normal spawn priority. |
+| `role.harvester.js` | Bootstrap and recovery economy; fills core structures and can upgrade the controller. Not replaced once Miners and a Storekeeper run the room. Highest normal spawn priority. |
 | `role.miner.js` | Source-assigned static mining with nearby container/storage/link delivery and timed replacement requests. |
 | `role.miner.mineral.js` | Automatically dispatched RCL 6+ mineral harvesting with extractor/regeneration/capacity checks and storage/terminal delivery. |
 | `role.storekeeper.js` | WORK-less, energy-only logistics worker running `LogisticsRunner` tasks. |
@@ -99,7 +100,7 @@ All roles extend `RolePrototype` and are registered in `BaseManager.fetchAllRole
 Decouples resource producers (miners, containers, labs, dropped piles) from consumers (spawns, extensions, towers, labs, storage) through a persistent per-room task queue capped at 100 tasks. Tasks have stable IDs derived from room, source, target, and resource type, and kinds `supply`, `collect`, or `route`. Claims link `task.assignedCreep` with `creep.memory.taskId`/`creep.memory.logistics`, and `remaining` is reconciled from cargo changes, including partial deliveries. Storekeepers accept only energy tasks; Couriers accept any resource.
 
 ### 2. RCL-Aware Construction Planner (`manager.mayor.js` + `manager.room.js`)
-Automatically manages building placement as the Room Controller Level progresses, enforcing RCL-gated unlocks and smart placement with layout fallbacks. Mayor defaults to automatic operation and supports `off`, `warn`, and `auto` modes; nuker construction and wall/rampart fortification are explicitly opt-in via `room.memory.mayor`.
+Automatically manages building placement as the Room Controller Level progresses, enforcing RCL-gated unlocks and smart placement with layout fallbacks. Mayor defaults to automatic operation and supports `off`, `warn`, and `auto` modes; nuker construction and wall/rampart fortification are explicitly opt-in via `room.memory.mayor`. With `room.memory.mayor.enableFortification` on, the room also plans one minimum-cut rampart line at RCL 4 or higher.
 
 ### 3. Coordinated Defense (`manager.defense.js` + `manager.tower.js`)
 Room-wide threat assessment replaces uncoordinated single-tower logic:
@@ -195,6 +196,10 @@ There is no compile, lint, format, watch, or upload script — the root `.js` fi
 | `test/boost.regression.test.js` | Boost preflight, costs, reservations, multi-lab movement, cleanup, emergency bypass, and outsourced spawning. |
 | `test/hardening.regression.test.js` | Healing estimates, recovery reserve, layout top-up, job isolation and tiers, CPU history, heap and Memory rules, movement, work claims, and the base planner. |
 | `test/demand.regression.test.js` | Derived demand, the spawn queue, energy reservation, pre-spawn, and a new room reaching RCL 4 with no console commands. |
+| `test/lifetime.regression.test.js` | Runs a growing room with every game object rebuilt between ticks, so anything kept across ticks throws. |
+| `test/movement.regression.test.js` | The heap path cache, its fallbacks, and stuck handling. |
+| `test/assignment.regression.test.js` | Harvesters only during bootstrap, looting through the queue, and derived bodies. |
+| `test/mincut.regression.test.js` | The minimum cut itself, checked by walking out of the result, and rampart planning. |
 | `test/syntax.test.js` | `node --check` on every root-level `.js` file. |
 
 Tests use the local mocks in `test/helpers/screeps.js` (`resetScreeps`, `makeRoom`, `makeStructure`, `makeCreep`, `makeSpawn`, `makeStore`, `makeLab`, `setFind`, `registerObject`); they do not connect to a Screeps server. Note that `logistics.runner.js` uses `// @ts-check` with JSDoc types — keep those annotations valid.
@@ -239,6 +244,7 @@ clearConsole();
 // Settings / CPU
 setSetting('visuals', false);    // also: pathVisuals, creepIcons
 cpuReport();                     // average CPU, bucket trend, most expensive jobs
+version();                       // which version of the code the shard is running
 ```
 
 Role names and object IDs are case-sensitive. Spawning, construction, safe mode, and recycle commands affect a live base immediately.

@@ -40,7 +40,6 @@ class IntelManager {
                 info.error('Could not observe room ' + room.name + ': ' + error, room);
             }
         });
-        this.cleanup();
     }
 
     static observeRoom(room) {
