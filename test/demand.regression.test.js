@@ -73,13 +73,14 @@ describe('Derived spawn demand', function () {
             const { room } = homeRoom();
             addSource(room, 's1', 10, 10);
             addSource(room, 's2', 40, 40);
-            assert.equal(EconomyManager.getDesiredHarvesters(room), 2);
+            const perSource = config.ECONOMY.HARVESTERS_PER_SOURCE_MAX;
+            assert.equal(EconomyManager.getDesiredHarvesters(room), 2 * perSource);
             addStructure(room, STRUCTURE_CONTAINER, 11, 11);
             require('../main.cache').initRound([]);
-            assert.equal(EconomyManager.getDesiredHarvesters(room), 2, 'a container alone adds no income');
+            assert.equal(EconomyManager.getDesiredHarvesters(room), 2 * perSource, 'a container alone adds no income');
             addCreep(room, 'miner', 'Miner', { memory: { role: 'Miner', home: 'A', source: 's1' } });
             require('../main.cache').initRound([]);
-            assert.equal(EconomyManager.getDesiredHarvesters(room), 1);
+            assert.equal(EconomyManager.getDesiredHarvesters(room), perSource);
         });
 
         it('derives hauling from output and distance, and skips sources with a link', function () {
@@ -89,21 +90,16 @@ describe('Derived spawn demand', function () {
             addStructure(room, STRUCTURE_CONTAINER, 39, 39);
             const roundTrip = 30 * config.ECONOMY.PATH_FACTOR * 2;
             assert.equal(EconomyManager.getHaulingCarryParts(room), Math.ceil(10 * roundTrip / CARRY_CAPACITY));
-            addStructure(room, STRUCTURE_LINK, 41, 41);
+            addStructure(room, STRUCTURE_LINK, 38, 38);
+            addStructure(room, STRUCTURE_LINK, 11, 41, { memory: { type: 'target' } });
             require('../main.cache').initRound([]);
             assert.equal(EconomyManager.getHaulingCarryParts(room), 0);
         });
 
-        it('scales Upgraders with stored surplus and stops at RCL 8', function () {
+        it('keeps one Upgrader while static mining is not running, however much is stored', function () {
             const { room } = homeRoom();
             assert.equal(EconomyManager.getDesiredUpgraders(room), 1);
-            room.storage = makeStructure(room, STRUCTURE_STORAGE, { store: makeStore(1000000, { [RESOURCE_ENERGY]: 50000 }) });
-            assert.equal(EconomyManager.getDesiredUpgraders(room), 1);
-            room.storage.store.set(RESOURCE_ENERGY, 300000);
-            assert.equal(EconomyManager.getDesiredUpgraders(room), 3);
-            room.storage.store.set(RESOURCE_ENERGY, 1000000);
-            assert.equal(EconomyManager.getDesiredUpgraders(room), config.ECONOMY.UPGRADER_MAX);
-            room.controller.level = 8;
+            room.storage = makeStructure(room, STRUCTURE_STORAGE, { store: makeStore(1000000, { [RESOURCE_ENERGY]: 300000 }) });
             assert.equal(EconomyManager.getDesiredUpgraders(room), 1);
         });
 
@@ -125,7 +121,7 @@ describe('Derived spawn demand', function () {
             addStructure(room, STRUCTURE_CONTAINER, 39, 39);
             room.memory.logistics = { tasks: [{ remaining: 100, state: 'open', resourceType: RESOURCE_ENERGY, retryAfter: 0 }] };
             const carry = EconomyManager.getHaulingCarryParts(room);
-            assert.equal(LogisticsManager.getDesiredWorkerCount(room, 'Storekeeper'), Math.min(config.ECONOMY.WORKERS_MAX, Math.ceil(carry / 5)));
+            assert.equal(LogisticsManager.getDesiredWorkerCount(room, 'Storekeeper'), Math.ceil(carry / Math.floor(800 / (BODYPART_COST[MOVE] + BODYPART_COST[CARRY]))), 'each one carries what the room can pay for');
             room.memory.logistics.tasks = [];
             assert.equal(LogisticsManager.getDesiredWorkerCount(room, 'Storekeeper'), 0);
         });

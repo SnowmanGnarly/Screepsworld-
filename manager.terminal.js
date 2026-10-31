@@ -62,7 +62,7 @@ class TerminalManager {
             delete empire.resourceRequests[id];
             existing = null;
         }
-        var priority = this._clamp(options.priority, 0, 1000, options.defense ? 200 : 50);
+        var priority = MainUtil.clamp(options.priority, 0, 1000, options.defense ? 200 : 50);
         if (options.defense) priority = Math.max(200, priority);
         if (!existing && Object.keys(empire.resourceRequests).length >= IntelManager.MAX_RESOURCE_REQUESTS) {
             var candidate = Object.keys(empire.resourceRequests).map(key => empire.resourceRequests[key]).sort((a, b) => {
@@ -144,9 +144,9 @@ class TerminalManager {
 
     static _getExpiry(options) {
         var maximum = Game.time + TerminalManager.MAX_REQUEST_TTL;
-        if (Number.isFinite(options.expiresAt)) return this._clamp(Math.floor(options.expiresAt), Game.time + 1, maximum, maximum);
+        if (Number.isFinite(options.expiresAt)) return MainUtil.clamp(Math.floor(options.expiresAt), Game.time + 1, maximum, maximum);
         var ttl = options.expiresIn === undefined ? options.expiry : options.expiresIn;
-        ttl = this._clamp(ttl, 1, TerminalManager.MAX_REQUEST_TTL, TerminalManager.DEFAULT_REQUEST_TTL);
+        ttl = MainUtil.clamp(ttl, 1, TerminalManager.MAX_REQUEST_TTL, TerminalManager.DEFAULT_REQUEST_TTL);
         return Game.time + ttl;
     }
 
@@ -159,7 +159,7 @@ class TerminalManager {
             enabled: true,
             emergencyReserve: 50000,
             batchSize: 5000,
-            cooldown: 10,
+            cooldown: TERMINAL_COOLDOWN,
             hysteresis: 500,
             maxTransfersPerTick: 1,
             historyLimit: 50,
@@ -172,21 +172,21 @@ class TerminalManager {
         var existing = room.memory.terminal || {};
         var memory = Object.assign(defaults, existing);
         memory.enabled = memory.enabled !== false;
-        memory.emergencyReserve = this._clamp(memory.emergencyReserve, 0, 10000000, 50000);
-        memory.batchSize = this._clamp(memory.batchSize, 1, 100000, 5000);
-        memory.cooldown = this._clamp(memory.cooldown, 0, 100, 10);
-        memory.hysteresis = this._clamp(memory.hysteresis, 0, memory.batchSize, Math.min(500, memory.batchSize));
-        memory.maxTransfersPerTick = this._clamp(memory.maxTransfersPerTick, 1, 5, 1);
-        memory.historyLimit = this._clamp(memory.historyLimit, 1, 100, 50);
-        memory.nextSendAt = this._clamp(memory.nextSendAt, 0, Number.MAX_SAFE_INTEGER, 0);
+        memory.emergencyReserve = MainUtil.clamp(memory.emergencyReserve, 0, 10000000, 50000);
+        memory.batchSize = MainUtil.clamp(memory.batchSize, 1, 100000, 5000);
+        memory.cooldown = MainUtil.clamp(memory.cooldown, 0, 100, TERMINAL_COOLDOWN);
+        memory.hysteresis = MainUtil.clamp(memory.hysteresis, 0, memory.batchSize, Math.min(500, memory.batchSize));
+        memory.maxTransfersPerTick = MainUtil.clamp(memory.maxTransfersPerTick, 1, 5, 1);
+        memory.historyLimit = MainUtil.clamp(memory.historyLimit, 1, 100, 50);
+        memory.nextSendAt = MainUtil.clamp(memory.nextSendAt, 0, Number.MAX_SAFE_INTEGER, 0);
         memory.history = Array.isArray(memory.history) ? memory.history.slice(-memory.historyLimit) : [];
         memory.resources = memory.resources && typeof memory.resources === 'object' ? memory.resources : {};
         Object.keys(memory.resources).slice(0, TerminalManager.MAX_RESOURCE_TYPES).forEach(resourceType => {
             var rule = memory.resources[resourceType] || {};
-            rule.min = this._clamp(rule.min, 0, 10000000, 0);
-            rule.target = this._clamp(rule.target, rule.min, 10000000, rule.min);
-            rule.max = this._clamp(rule.max, rule.target, 10000000, rule.target);
-            rule.reserve = this._clamp(rule.reserve, 0, 10000000, 0);
+            rule.min = MainUtil.clamp(rule.min, 0, 10000000, 0);
+            rule.target = MainUtil.clamp(rule.target, rule.min, 10000000, rule.min);
+            rule.max = MainUtil.clamp(rule.max, rule.target, 10000000, rule.target);
+            rule.reserve = MainUtil.clamp(rule.reserve, 0, 10000000, 0);
             memory.resources[resourceType] = rule;
         });
         room.memory.terminal = memory;
@@ -302,10 +302,10 @@ class TerminalManager {
         if (!room.memory.logistics.terminalStockPolicy) room.memory.logistics.terminalStockPolicy = {};
         var policy = room.memory.logistics.terminalStockPolicy;
         var existing = policy[resourceType];
-        priority = this._clamp(priority, 0, 1000, 40);
+        priority = MainUtil.clamp(priority, 0, 1000, 40);
         if (existing && !replace && existing.priority > priority) return existing;
-        minimum = this._clamp(Math.floor(minimum), 0, 10000000, 0);
-        maximum = this._clamp(Math.floor(maximum), minimum, 10000000, minimum);
+        minimum = MainUtil.clamp(Math.floor(minimum), 0, 10000000, 0);
+        maximum = MainUtil.clamp(Math.floor(maximum), minimum, 10000000, minimum);
         policy[resourceType] = { min: minimum, max: maximum, priority: priority };
         if (Object.keys(policy).length > TerminalManager.MAX_RESOURCE_TYPES) {
             var oldest = Object.keys(policy).sort()[0];
@@ -392,7 +392,7 @@ class TerminalManager {
 
     static createTransactionPlan(room, resourceType, requestedAmount, targetRoomName, options = {}) {
         var sendResource = options.sendResource !== false;
-        var requested = this._clamp(Math.floor(requestedAmount), 0, TerminalManager.MAX_REQUEST_AMOUNT, 0);
+        var requested = MainUtil.clamp(Math.floor(requestedAmount), 0, TerminalManager.MAX_REQUEST_AMOUNT, 0);
         if (Number.isFinite(options.maxAmount)) requested = Math.min(requested, Math.max(0, Math.floor(options.maxAmount)));
         var availableResource = sendResource ? this.getAvailable(room, resourceType, options.requestId) : requested;
         var availableEnergy = this.getAvailable(room, RESOURCE_ENERGY, options.requestId);
@@ -454,7 +454,7 @@ class TerminalManager {
     static getReserve(room, resourceType) {
         var config = this.getConfig(room);
         var rule = config.resources[resourceType] || {};
-        var reserve = this._clamp(rule.reserve, 0, 10000000, 0);
+        var reserve = MainUtil.clamp(rule.reserve, 0, 10000000, 0);
         return resourceType === RESOURCE_ENERGY ? Math.max(reserve, config.emergencyReserve) : reserve;
     }
 
@@ -515,13 +515,6 @@ class TerminalManager {
         return String(value).substring(0, 100).replace(/[^A-Za-z0-9_.:-]/g, '_');
     }
 
-    static _clamp(value, minimum, maximum, fallback) {
-        value = Number(value);
-        if (value === Infinity) return maximum;
-        if (value === -Infinity) return minimum;
-        if (!Number.isFinite(value)) return fallback;
-        return Math.max(minimum, Math.min(maximum, value));
-    }
 }
 
 TerminalManager.DEFAULT_REQUEST_TTL = 1000;

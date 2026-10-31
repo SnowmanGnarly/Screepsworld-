@@ -5,6 +5,8 @@
 var MainUtil = require('./main.util');
 var MainInfo = require('./main.info');
 var MainCache = require('./main.cache');
+var MainConfig = require('./main.config');
+var MainScheduler = require('./main.scheduler');
 
 var BaseManager = require('./manager.base');
 var CpuManager = require('./manager.cpu');
@@ -28,41 +30,86 @@ var Miner = require('./role.miner');
 
 var TileArray = require('./tile.array');
 
-module.exports.loop = function () {
+const MAYOR_INTERVAL = 10;
 
-    // init all necessary information
+// roles hold no state between ticks, so one set serves until the next global reset
+var allRoles = null;
 
-    var allRoles = BaseManager.fetchAllRoles();
-    CpuManager.initRound();
-    CpuManager.measure('initRound()', () => MemoryManager.initRound(allRoles));
-    MainCache.initRound(allRoles);
-
-    // run cheap empire planning, defense, and centralized logistics first
-
-    CpuManager.measure('IntelManager', () => IntelManager.runAll());
-    CpuManager.measure('RemoteManager', () => RemoteManager.runAll(CpuManager.shouldRunDeferred()));
-    CpuManager.measure('DefenseManager', () => DefenseManager.runAll());
-    CpuManager.measure('FactoryManager', () => FactoryManager.runAll());
-    CpuManager.measure('LabManager', () => LabManager.runAll());
-    CpuManager.measure('TerminalManager', () => TerminalManager.runAll());
-    CpuManager.measure('MarketManager', () => MarketManager.runAll(CpuManager.shouldRunDeferred()));
-    CpuManager.measure('LogisticsManager', LogisticsManager.runAll);
-
-    // run the entire base
-
-    CpuManager.measure('BaseManager', () => BaseManager.runAll(allRoles));
-    CpuManager.measure('TowerManager', TowerManager.runAll);
-    CpuManager.measure('LinkManager', LinkManager.runAll);
-
-    if (CpuManager.shouldRunDeferred()) {
-        CpuManager.measure('RoadManager', RoadManager.watchAllRooms);
-        CpuManager.measure('MayorManager', MayorManager.runAll);
+// The order is the tick order. Towers and links run ahead of spawning so that a problem in the
+// economy can never cost us our defense.
+const JOBS = [
+    { name: 'initRound()', run: () => MemoryManager.initRound(allRoles) },
+    { name: 'MainCache', run: () => MainCache.initRound(allRoles) },
+    { name: 'IntelManager', tier: CpuManager.TIER_DEGRADED, run: () => IntelManager.runAll() },
+    { name: 'RemoteManager', tier: CpuManager.TIER_DEGRADED, run: () => RemoteManager.runAll(CpuManager.shouldRunDeferred()) },
+    { name: 'DefenseManager', run: () => DefenseManager.runAll() },
+    { name: 'TowerManager', run: () => TowerManager.runAll() },
+    { name: 'LinkManager', run: () => LinkManager.runAll() },
+    { name: 'FactoryManager', tier: CpuManager.TIER_DEGRADED, run: () => FactoryManager.runAll() },
+    { name: 'LabManager', tier: CpuManager.TIER_DEGRADED, run: () => LabManager.runAll() },
+    { name: 'TerminalManager', tier: CpuManager.TIER_DEGRADED, run: () => TerminalManager.runAll() },
+    { name: 'MarketManager', tier: CpuManager.TIER_DEGRADED, run: () => MarketManager.runAll(CpuManager.shouldRunDeferred()) },
+    { name: 'LogisticsManager', run: () => LogisticsManager.runAll() },
+    { name: 'BaseManager', run: () => BaseManager.runAll(allRoles) },
+    { name: 'RoadManager', tier: CpuManager.TIER_NORMAL, run: () => RoadManager.watchAllRooms() },
+    { name: 'MayorManager', tier: CpuManager.TIER_NORMAL, every: MAYOR_INTERVAL, run: () => MayorManager.runAll() },
+    { name: 'Visuals', tier: CpuManager.TIER_NORMAL, enabled: () => MainConfig.getSetting('visuals'), run: () => {
         MainInfo.visualize();
         CpuManager.visualize();
+    } },
+    { name: 'Stats', run: () => CpuManager.collectStats() },
+];
+
+module.exports.loop = function () {
+    if (!allRoles) {
+        allRoles = BaseManager.fetchAllRoles();
+        MainInfo.log('Screepsworld ' + MainConfig.VERSION + ' loaded');
     }
+    CpuManager.initRound();
+    MainScheduler.run(JOBS);
+}
+
+// A count above zero is a floor over what the room derives. Zero means the operator wants none.
+function applyManualCount(roleConfig, count) {
+    roleConfig.requiredNumber = count;
+    if (count === 0) roleConfig.auto = false;
+    else delete roleConfig.auto;
 }
 
 // some helper methods to make managing this thing more easily
+
+/*
+ * Changes a console setting, e.g. setSetting('visuals', false). See main.config.js for the list.
+ *
+ * @param name
+ * @param value
+ */
+
+global.setSetting = function (name, value) {
+    if (!MainConfig.isSetting(name)) {
+        MainInfo.error('Unknown setting: ' + name);
+        return false;
+    }
+    if (!Memory.settings) Memory.settings = {};
+    Memory.settings[name] = value;
+    return true;
+};
+
+/*
+ * Prints average CPU, the bucket trend and the most expensive jobs from the stored history.
+ */
+
+global.cpuReport = function () {
+    return CpuManager.getStatsReport();
+};
+
+/*
+ * Shows which version of the code the shard is running.
+ */
+
+global.version = function () {
+    return MainConfig.VERSION;
+};
 
 /*
  * Prints the oldest creep with its ticks to live to the console.
@@ -72,7 +119,7 @@ module.exports.loop = function () {
 
 global.fetchOldestCreep = function (baseName) {
     var oldestCreep = MainUtil.findAllCreeps().
-        filter(creep => (!baseName || creep.room.memory.home == baseName)).
+        filter(creep => (!baseName || creep.memory.home == baseName)).
         sort((a, b) => { return a.ticksToLive - b.ticksToLive });
 
     if (oldestCreep.length > 0) {
@@ -198,7 +245,7 @@ global.setCreepCount = function (roomName, roleName, count) {
         MainInfo.error('Could not find role: ' + roleName);
         return false;
     }
-    room.memory.base.roleConfig[roleName].requiredNumber = count;
+    applyManualCount(room.memory.base.roleConfig[roleName], count);
     MainInfo.log('Set ' + roleName + ' count to ' + count + ' in room ' + roomName);
     return true;
 };
@@ -225,7 +272,7 @@ global.setMultipleCreepCounts = function (roomName, roleNames, count) {
     var successCount = 0;
     roleNames.forEach(roleName => {
         if (room.memory.base.roleConfig[roleName]) {
-            room.memory.base.roleConfig[roleName].requiredNumber = count;
+            applyManualCount(room.memory.base.roleConfig[roleName], count);
             successCount++;
         } else {
             MainInfo.error('Could not find role: ' + roleName);

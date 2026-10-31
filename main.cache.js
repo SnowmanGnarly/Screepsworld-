@@ -15,7 +15,18 @@ class MainCache {
 			freeSpawns: new Map(),
 			reservedSpawns: new Set(),
 			roomFinds: new Map(),
+			memos: new Map(),
 		};
+	}
+
+	/*
+	 * Computes a value once per tick. Use it for derived values that many callers ask for.
+	 */
+
+	static memo(key, compute) {
+		var memos = this._getState().memos;
+		if (!memos.has(key)) memos.set(key, compute());
+		return memos.get(key);
 	}
 
 	static _getState() {
@@ -49,6 +60,11 @@ class MainCache {
 		return this._getCollection('flags', Game.flags);
 	}
 
+	// after a creep changes base
+	static resetCreepsByHome() {
+		this._getState().creepsByHome = null;
+	}
+
 	static getCreepsByHome(baseName) {
 		var state = this._getState();
 		if (!state.creepsByHome) {
@@ -62,23 +78,6 @@ class MainCache {
 			});
 		}
 		return state.creepsByHome.get(baseName) || [];
-	}
-
-	static getCreepCount(baseName, roleName) {
-		var state = this._getState();
-		if (!state.creepCounts) {
-			state.creepCounts = new Map();
-			this.getCreeps().forEach(creep => {
-				var home = creep.memory.home;
-				if (!state.creepCounts.has(home)) {
-					state.creepCounts.set(home, new Map());
-				}
-				var counts = state.creepCounts.get(home);
-				counts.set(creep.memory.role, (counts.get(creep.memory.role) || 0) + 1);
-			});
-		}
-		var counts = state.creepCounts.get(baseName);
-		return counts ? counts.get(roleName) || 0 : 0;
 	}
 
 	static getFreeSpawns(baseName) {
@@ -134,6 +133,7 @@ class MainCache {
 
 	static invalidateRoom(room, findType) {
 		var state = this._getState();
+		state.memos.clear();
 		if (!state.roomFinds.has(room.name)) {
 			return;
 		}
@@ -151,6 +151,7 @@ class MainCache {
 	static recordSpawn(creep, spawn) {
 		var state = this._getState();
 		state.reservedSpawns.add(spawn.name);
+		state.memos.clear();
 		state.freeSpawns = new Map();
 		state.creepsByHome = null;
 		state.creepCounts = null;

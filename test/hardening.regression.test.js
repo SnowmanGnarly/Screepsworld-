@@ -242,7 +242,8 @@ describe('Hardening regressions', function () {
             remote.travelTicks = 50;
             remote.sources = [{ id: 's1', output: 10 }, { id: 's2', output: 10 }];
             const demand = RemoteManager.calculateRouteDemand(remote, { baseRoom: room });
-            assert.equal(demand.haulers, 6);
+            assert.ok(demand.haulers * demand.capacity >= 20 * demand.roundTripTicks, 'carries what the route produces');
+            assert.ok(demand.haulers <= 6, 'with no more creeps than the old small bodies needed');
         });
 
         it('raises a stored legacy hauler cap once and then respects explicit values', function () {

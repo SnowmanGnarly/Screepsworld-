@@ -51,18 +51,18 @@ class MarketManager {
         memory.buy = memory.buy === true;
         memory.sell = memory.sell === true;
         memory.createOrders = false;
-        memory.batchSize = this._clamp(memory.batchSize, 1, 100000, 1000);
-        memory.scanCooldown = this._clamp(memory.scanCooldown, 1, 1000, 25);
-        memory.failureCooldown = this._clamp(memory.failureCooldown, 10, 5000, 100);
-        memory.maxDealsPerTick = this._clamp(memory.maxDealsPerTick, 1, 5, 1);
-        memory.maxScannedOrders = this._clamp(memory.maxScannedOrders, 1, 1000, 100);
-        memory.maxCreditsPerTick = this._clamp(memory.maxCreditsPerTick, 0, 1000000000, 10000);
-        memory.maxCreditsPerDeal = this._clamp(memory.maxCreditsPerDeal, 0, 1000000000, 5000);
-        memory.minCreditBalance = this._clamp(memory.minCreditBalance, 0, 1000000000, 0);
-        memory.energyPrice = this._clamp(memory.energyPrice, 0, 1000000, 0);
-        memory.historyLimit = this._clamp(memory.historyLimit, 1, 100, 50);
-        memory.nextScanAt = this._clamp(memory.nextScanAt, 0, Number.MAX_SAFE_INTEGER, 0);
-        memory.failures = this._clamp(memory.failures, 0, 20, 0);
+        memory.batchSize = MainUtil.clamp(memory.batchSize, 1, 100000, 1000);
+        memory.scanCooldown = MainUtil.clamp(memory.scanCooldown, 1, 1000, 25);
+        memory.failureCooldown = MainUtil.clamp(memory.failureCooldown, 10, 5000, 100);
+        memory.maxDealsPerTick = MainUtil.clamp(memory.maxDealsPerTick, 1, 5, 1);
+        memory.maxScannedOrders = MainUtil.clamp(memory.maxScannedOrders, 1, 1000, 100);
+        memory.maxCreditsPerTick = MainUtil.clamp(memory.maxCreditsPerTick, 0, 1000000000, 10000);
+        memory.maxCreditsPerDeal = MainUtil.clamp(memory.maxCreditsPerDeal, 0, 1000000000, 5000);
+        memory.minCreditBalance = MainUtil.clamp(memory.minCreditBalance, 0, 1000000000, 0);
+        memory.energyPrice = MainUtil.clamp(memory.energyPrice, 0, 1000000, 0);
+        memory.historyLimit = MainUtil.clamp(memory.historyLimit, 1, 100, 50);
+        memory.nextScanAt = MainUtil.clamp(memory.nextScanAt, 0, Number.MAX_SAFE_INTEGER, 0);
+        memory.failures = MainUtil.clamp(memory.failures, 0, 20, 0);
         memory.history = Array.isArray(memory.history) ? memory.history.slice(-memory.historyLimit) : [];
         memory.resources = memory.resources && typeof memory.resources === 'object' ? memory.resources : {};
         var terminalRules = TerminalManager.getConfig(room).resources;
@@ -76,16 +76,16 @@ class MarketManager {
             }, memory.resources[resourceType] || {});
             rule.buy = rule.buy === true;
             rule.sell = rule.sell === true;
-            rule.min = this._clamp(rule.buyBelow === undefined ? rule.min : rule.buyBelow, 0, 10000000, 0);
-            rule.target = this._clamp(rule.buyTo === undefined ? rule.target : rule.buyTo, rule.min, 10000000, rule.min);
-            rule.max = this._clamp(rule.sellAbove === undefined ? rule.max : rule.sellAbove, 0, 10000000, 0);
-            rule.sellTo = this._clamp(rule.sellTo, 0, rule.max, rule.max);
-            rule.reserve = this._clamp(rule.reserve, 0, 10000000, 0);
-            rule.maxBuyPrice = this._clamp(rule.maxBuyPrice === undefined ? rule.maxPrice : rule.maxBuyPrice,
+            rule.min = MainUtil.clamp(rule.buyBelow === undefined ? rule.min : rule.buyBelow, 0, 10000000, 0);
+            rule.target = MainUtil.clamp(rule.buyTo === undefined ? rule.target : rule.buyTo, rule.min, 10000000, rule.min);
+            rule.max = MainUtil.clamp(rule.sellAbove === undefined ? rule.max : rule.sellAbove, 0, 10000000, 0);
+            rule.sellTo = MainUtil.clamp(rule.sellTo, 0, rule.max, rule.max);
+            rule.reserve = MainUtil.clamp(rule.reserve, 0, 10000000, 0);
+            rule.maxBuyPrice = MainUtil.clamp(rule.maxBuyPrice === undefined ? rule.maxPrice : rule.maxBuyPrice,
                 0, 1000000, 0);
-            rule.minSellPrice = this._clamp(rule.minSellPrice === undefined ? rule.minPrice : rule.minSellPrice,
+            rule.minSellPrice = MainUtil.clamp(rule.minSellPrice === undefined ? rule.minPrice : rule.minSellPrice,
                 0, 1000000, 0);
-            rule.batchSize = this._clamp(rule.batchSize, 1, 100000, memory.batchSize);
+            rule.batchSize = MainUtil.clamp(rule.batchSize, 1, 100000, memory.batchSize);
             memory.resources[resourceType] = rule;
         });
         room.memory.market = memory;
@@ -244,13 +244,6 @@ class MarketManager {
         return true;
     }
 
-    static _clamp(value, minimum, maximum, fallback) {
-        value = Number(value);
-        if (value === Infinity) return maximum;
-        if (value === -Infinity) return minimum;
-        if (!Number.isFinite(value)) return fallback;
-        return Math.max(minimum, Math.min(maximum, value));
-    }
 }
 
 MarketManager.MAX_DEALS_PER_TICK = 10;

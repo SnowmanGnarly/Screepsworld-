@@ -20,10 +20,15 @@
  */
 
 var constants = require('./main.constants');
+var config = require('./main.config');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
 var info = require('./main.info');
+var MainHeap = require('./main.heap');
+var MainMove = require('./main.move');
 
+var EconomyManager = require('./manager.economy');
+var LogisticsManager = require('./manager.logistics');
 var MemoryManager = require('./manager.memory');
 var LabManager = require('./manager.lab');
 
@@ -33,7 +38,7 @@ class RolePrototype {
 		this.roleName = roleName;
 		this.color = color;
 		this.symbol = symbol;
-		this.priority = 0; // the higher the better
+		this.priority = config.ROLE_PRIORITY[roleName] || 0; // the higher the better
 
 		this._resourceType = RESOURCE_ENERGY;
 		this._reusePath = 5;
@@ -45,17 +50,39 @@ class RolePrototype {
 	 * Creates a single creep for this role.
 	 */
 
-	spawnCreep(spawn) {
-		return this._spawnCreepWithParts(spawn, [WORK, CARRY, MOVE, MOVE]);
+	spawnCreep(spawn, options = {}) {
+		return this._spawnCreepWithParts(spawn, [WORK, CARRY, MOVE, MOVE], [], options);
 	}
 
-	spawnMissionCreep(spawn, request) {
+	/*
+	 * How many creeps of this role the room needs, derived from game state. Manual quotas in
+	 * roleConfig raise this; roles that are only ever configured by hand keep the default.
+	 *
+	 * @param {Room} room
+	 */
+
+	getDemand(room) {
+		return 0;
+	}
+
+	/*
+	 * True if an existing creep should stop counting because its replacement must start now.
+	 *
+	 * @param {Creep} creep
+	 */
+
+	needsReplacement(creep) {
+		if (creep.spawning || !Number.isFinite(creep.ticksToLive)) return false;
+		return creep.ticksToLive <= creep.body.length * CREEP_SPAWN_TIME + config.SPAWN.PRESPAWN_MARGIN;
+	}
+
+	spawnMissionCreep(spawn, request, options = {}) {
 		var body = request && (request.exactBody || request.body);
 		var memory = Object.assign({}, request && request.memory, {
 			role: request && request.role || this.roleName,
 			home: request && request.home || spawn.memory.home,
 		});
-		return this._spawnCreepWithBody(spawn, body, memory);
+		return this._spawnCreepWithBody(spawn, body, memory, options);
 	}
 
 	/*
@@ -66,7 +93,8 @@ class RolePrototype {
 	 */
 
 	isNecessary(room) {
-		if (!room.memory.base.roleConfig[this.roleName].requiredNumber) {
+		var roleConfig = room.memory.base.roleConfig[this.roleName];
+		if (!(roleConfig && roleConfig.requiredNumber) && !(EconomyManager.isAutomatic(room, this.roleName) && this.getDemand(room) > 0)) {
 			// if this role is not required, it's not necessary either
 			return false;
 		}
@@ -213,11 +241,7 @@ class RolePrototype {
 	 */
 
 	_moveToLocation(creep, location) {
-		var moveResult = creep.moveTo(location, {
-			reusePath: this._reusePath,
-			visualizePathStyle: { stroke: this.color }
-		});
-		creep.memory.moving = moveResult == OK;
+		var moveResult = MainMove.to(creep, location, { reusePath: this._reusePath, color: this.color });
 		if (moveResult != OK && creep.memory.debug) {
 			info.log(this.symbol + ' ' + MainUtil.getDisplayName(creep) + ' could not move: ' + moveResult, this._baseRoom);
 		}
@@ -233,7 +257,6 @@ class RolePrototype {
 		}
 		x = Number.isFinite(x) ? Math.max(0, Math.min(49, x)) : 25;
 		y = Number.isFinite(y) ? Math.max(0, Math.min(49, y)) : 25;
-		creep.memory.destination = { roomName: roomName, x: x, y: y };
 		if (creep.room.name === roomName) return true;
 		this._moveToLocation(creep, new RoomPosition(x, y, roomName));
 		return false;
@@ -278,17 +301,14 @@ class RolePrototype {
 		if (creep.memory.source) {
 			// creep has specific source in mind
 			specificSource = Game.getObjectById(creep.memory.source);
-			if (specificSource && this._sourceMode == RolePrototype.SOURCE_MODE_USE_OR_WAIT) {
+			if (specificSource && this._sourceMode == RolePrototype.SOURCE_MODE_USE_OR_WAIT && !this._isLeftToHaulers(specificSource)) {
 				// only in TARGET_MODE_USE_OR_WAIT we don't care for the validity of the source
 				return specificSource;
 			}
 			if (!specificSource) {
-				info.error(MainUtil.getDisplayName(creep) + ' could not find source: ' + creep.memory.source);
-
-				if (this._sourceMode != RolePrototype.SOURCE_MODE_USE_IF_VALID) {
-					// only in SOURCE_MODE_USE_IF_VALID can we recover from that error
-					return null;
-				}
+				// a destroyed store is not coming back, so waiting for it would freeze this creep for good
+				info.log(MainUtil.getDisplayName(creep) + ' lost its source and is looking for another', this._baseRoom);
+				creep.memory.source = null;
 			}
 		}
 		var sources = this._findSources(this._baseRoom);
@@ -323,6 +343,12 @@ class RolePrototype {
 		return null;
 	}
 
+	// a worker remembers its source until it runs dry, which is no reason to keep draining a hauler's container
+	_isLeftToHaulers(store) {
+		if (!this._baseRoom || !EconomyManager.isSourceContainer(this._baseRoom, store)) return false;
+		return !this._findSources(this._baseRoom).some(source => source.id === store.id);
+	}
+
 	/*
 	 * Sorts the sources so the closest is first. If there are other things to
 	 * take into consideration, this function is overriden.
@@ -354,6 +380,7 @@ class RolePrototype {
 				(structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == constants.LINK_TYPE_TARGET)) &&
 				structure.store.getUsedCapacity(this._resourceType) > 0;
 		}) : [];
+		if (this._resourceType === RESOURCE_ENERGY) storages = EconomyManager.withoutSourceContainers(room, storages);
 
 		return storages.concat(this._findActiveSources(room));
 	}
@@ -423,14 +450,13 @@ class RolePrototype {
 	 */
 
 	run(creep, baseRoom = RolePrototype._fetchBaseRoomForCreep(creep), sourcePolicy = {}) {
-		this._creep = creep;
 		this._baseRoom = baseRoom;
 
 		// we want to keep track when a creep is actually moving
-		creep.memory.moving = false;
+		creep.movedThisTick = false;
 
 		// init values from room memory
-		var memoryRoleConfig = MemoryManager.fetchRoomRoleConfigForBase(creep.memory.home, [this]);
+		var memoryRoleConfig = MemoryManager.getRoleConfigForBase(creep.memory.home, this);
 		var useStorageAsSource = !memoryRoleConfig || memoryRoleConfig.useStorageAsSource;
 		var useSourceAsSource = !memoryRoleConfig || memoryRoleConfig.useSourceAsSource;
 		this._useStorageAsSource = sourcePolicy.useStorageAsSource === undefined ? useStorageAsSource : sourcePolicy.useStorageAsSource;
@@ -458,84 +484,64 @@ class RolePrototype {
 			return;
 		}
 
-		if (this._disableAutomaticLoot) {
+		// a full creep cannot loot anything, and it is the common case. Once a room has haulers the
+		// logistics queue collects everything, so scanning for it here would only duplicate them
+
+		if (this._disableAutomaticLoot || creep.store.getFreeCapacity() <= 0 || LogisticsManager.hasWorkers(creep.room)) {
 			this._work(creep);
 			return;
 		}
 
-		// picking up the role's resource is more important than working
+		if (!this._lootNearby(creep)) {
+			this._work(creep);
+		}
+	}
+
+	/*
+	 * Picks up what lies close by, largest pile first. Returns true when the creep has to walk to
+	 * it, which uses up its move for this tick. Anything a hauler has claimed is left to that hauler.
+	 *
+	 * @param {Creep} creep
+	 */
+
+	_lootNearby(creep) {
+		var claimedPickups = LogisticsManager.getClaims(creep.room).pickups;
+		var isNearby = object => !claimedPickups.has(object.id) && creep.pos.inRangeTo(object, config.ECONOMY.LOOT_RANGE);
 
 		var droppedResources = MainCache.find(creep.room, FIND_DROPPED_RESOURCES)
-			.filter(e => e.amount > 0 && creep.pos.inRangeTo(e, 3) && e.resourceType == this._resourceType)
-			.sort((a, b) => b.amount - a.amount); // Prioritize larger piles
-		if (droppedResources.length > 0 && creep.store.getFreeCapacity() > 0) {
+			.filter(e => e.amount > 0 && isNearby(e) && e.resourceType == this._resourceType)
+			.sort((a, b) => b.amount - a.amount);
+		if (droppedResources.length > 0) {
 			if (creep.memory.debug) {
 				info.log('🟡 ' + MainUtil.getDisplayName(creep) + ' is picking up resource ' + MainUtil.getDisplayName(droppedResources[0]), this._baseRoom);
 			}
 			var pickupResult = creep.pickup(droppedResources[0]);
 			if (pickupResult == ERR_NOT_IN_RANGE) {
 				this._moveToLocation(creep, droppedResources[0]);
-				return;
+				return true;
 			}
 			if (pickupResult == OK) {
 				MainCache.invalidateRoom(creep.room, FIND_DROPPED_RESOURCES);
 			}
-			// No return after successful pickup - creeps can pickup resources and continue to work
 		}
 
-		// looting a tombstone is more important than working
-		var tombstones = MainCache.find(creep.room, FIND_TOMBSTONES)
-			.filter(t => creep.pos.inRangeTo(t, 3) && t.store.getUsedCapacity(this._resourceType) > 0);
-		if (tombstones.length > 0 && creep.store.getFreeCapacity() > 0) {
-			var withdrawResult = creep.withdraw(tombstones[0], this._resourceType);
+		var holdsResource = object => isNearby(object) && object.store.getUsedCapacity(this._resourceType) > 0;
+		var remains = MainCache.find(creep.room, FIND_TOMBSTONES).filter(holdsResource)
+			.concat(MainCache.find(creep.room, FIND_RUINS).filter(holdsResource));
+		if (remains.length > 0) {
+			var withdrawResult = creep.withdraw(remains[0], this._resourceType);
 			if (withdrawResult == ERR_NOT_IN_RANGE) {
 				if (creep.memory.debug) {
-					info.log('⚰ ' + MainUtil.getDisplayName(creep) + ' is moving to tombstone ' + MainUtil.getDisplayName(tombstones[0]), this._baseRoom);
+					info.log('⚰ ' + MainUtil.getDisplayName(creep) + ' is moving to loot ' + MainUtil.getDisplayName(remains[0]), this._baseRoom);
 				}
-				this._moveToLocation(creep, tombstones[0]);
-				return;
-			} else if (withdrawResult == OK) {
-				if (creep.memory.debug) {
-					info.log('⚰ ' + MainUtil.getDisplayName(creep) + ' is looting the tombstone ' + MainUtil.getDisplayName(tombstones[0]), this._baseRoom);
-				}
-				// Continue to work after successful loot
-			} else if (withdrawResult == ERR_NOT_ENOUGH_RESOURCES) {
-				// Tombstone was depleted, continue to work
-				if (creep.memory.debug) {
-					info.log('⚰ ' + MainUtil.getDisplayName(creep) + ' tombstone was already looted', this._baseRoom);
-				}
-			} else {
-				info.log('⚰ ' + MainUtil.getDisplayName(creep) + ' cannot loot the tombstone: ' + withdrawResult, this._baseRoom);
+				this._moveToLocation(creep, remains[0]);
+				return true;
+			}
+			if (withdrawResult != OK && withdrawResult != ERR_NOT_ENOUGH_RESOURCES) {
+				info.log('⚰ ' + MainUtil.getDisplayName(creep) + ' cannot loot: ' + withdrawResult, this._baseRoom);
 			}
 		}
-
-		// looting ruins is important - they can contain significant resources
-		var ruins = MainCache.find(creep.room, FIND_RUINS)
-			.filter(r => creep.pos.inRangeTo(r, 3) && r.store.getUsedCapacity(this._resourceType) > 0);
-		if (ruins.length > 0 && creep.store.getFreeCapacity() > 0) {
-			var withdrawResult = creep.withdraw(ruins[0], this._resourceType);
-			if (withdrawResult == ERR_NOT_IN_RANGE) {
-				if (creep.memory.debug) {
-					info.log('🏚️ ' + MainUtil.getDisplayName(creep) + ' is moving to ruin ' + MainUtil.getDisplayName(ruins[0]), this._baseRoom);
-				}
-				this._moveToLocation(creep, ruins[0]);
-				return;
-			} else if (withdrawResult == OK) {
-				if (creep.memory.debug) {
-					info.log('🏚️ ' + MainUtil.getDisplayName(creep) + ' is looting the ruin ' + MainUtil.getDisplayName(ruins[0]), this._baseRoom);
-				}
-				// Continue to work after successful loot
-			} else if (withdrawResult == ERR_NOT_ENOUGH_RESOURCES) {
-				// Ruin was depleted, continue to work
-				if (creep.memory.debug) {
-					info.log('🏚️ ' + MainUtil.getDisplayName(creep) + ' ruin was already looted', this._baseRoom);
-				}
-			} else {
-				info.log('🏚️ ' + MainUtil.getDisplayName(creep) + ' cannot loot the ruin: ' + withdrawResult, this._baseRoom);
-			}
-		}
-
-		this._work(creep);
+		return false;
 	}
 
 	/*
@@ -637,10 +643,21 @@ class RolePrototype {
 		if (!body) {
 			return false;
 		}
-		var memory = {
-			role: this.roleName,
-			home: spawn.memory.home,
-		};
+		return this._spawnBody(spawn, body, { role: this.roleName, home: spawn.memory.home }, options);
+	}
+
+	_spawnCreepWithBody(spawn, body, memory, options = {}) {
+		if (!Array.isArray(body) || body.length === 0 || body.length > MAX_CREEP_SIZE) return false;
+		var cost = this._calculateCostsForParts(body);
+		if (!Number.isFinite(cost)) return false;
+		if (cost > spawn.room.energyAvailable) {
+			if (cost <= spawn.room.energyCapacityAvailable && this._shouldWaitForEnergy(options)) options.waitingForEnergy = true;
+			return false;
+		}
+		return this._spawnBody(spawn, body.slice(), memory, options);
+	}
+
+	_spawnBody(spawn, body, memory, options) {
 		var boostDecision = LabManager.planSpawnBoost(spawn, body, this.roleName, memory, options);
 		if (!boostDecision.allow) return false;
 		var newName = this._createCreepName(spawn);
@@ -656,30 +673,6 @@ class RolePrototype {
 			if (spawn.memory.debug) {
 				info.log(message, spawn.room);
 			}
-		} else {
-			info.error(message, spawn.room);
-		}
-		return false;
-	}
-
-	_spawnCreepWithBody(spawn, body, memory) {
-		if (!Array.isArray(body) || body.length === 0 || body.length > 50) return false;
-		var cost = this._calculateCostsForParts(body);
-		if (!Number.isFinite(cost) || cost > spawn.room.energyAvailable) return false;
-		body = body.slice();
-		var boostDecision = LabManager.planSpawnBoost(spawn, body, this.roleName, memory);
-		if (!boostDecision.allow) return false;
-		var newName = this._createCreepName(spawn);
-		var spawnResult = spawn.spawnCreep(body, newName, { memory: memory });
-		if (spawnResult == OK) {
-			var resultingCreep = Game.creeps[newName];
-			if (boostDecision.plan) LabManager.registerSpawnBoost(resultingCreep, boostDecision.plan);
-			MainCache.recordSpawn(resultingCreep, spawn);
-			return resultingCreep;
-		}
-		var message = 'Could not spawn ' + this.roleName + ' ' + newName + ' (' + body.length + ' parts, ' + cost + ' energy): ' + spawnResult;
-		if (spawnResult == ERR_NOT_ENOUGH_ENERGY || spawnResult == ERR_BUSY) {
-			if (spawn.memory.debug) info.log(message, spawn.room);
 		} else {
 			info.error(message, spawn.room);
 		}
@@ -710,12 +703,12 @@ class RolePrototype {
 		singleParts = singleParts || [];
 		var costs = this._calculateCostsForParts(parts);
 		var singleCosts = this._calculateCostsForParts(singleParts);
-		if (!Number.isFinite(costs) || !Number.isFinite(singleCosts) || parts.length + singleParts.length == 0 || singleParts.length > 50) {
+		if (!Number.isFinite(costs) || !Number.isFinite(singleCosts) || parts.length + singleParts.length == 0 || singleParts.length > MAX_CREEP_SIZE) {
 			return null;
 		}
 
 		if (options.exact) {
-			return parts.length + singleParts.length <= 50 && costs + singleCosts <= spawn.room.energyAvailable ? singleParts.concat(parts) : null;
+			return parts.length + singleParts.length <= MAX_CREEP_SIZE && costs + singleCosts <= spawn.room.energyAvailable ? singleParts.concat(parts) : null;
 		}
 
 		var minMultiplier = Math.floor(Number(this._getPartsMinMultiplier(spawn)));
@@ -724,9 +717,13 @@ class RolePrototype {
 			return null;
 		}
 		minMultiplier = Math.max(1, minMultiplier);
-		var partLimitedMax = parts.length > 0 ? Math.floor((50 - singleParts.length) / parts.length) : maxMultiplier;
+		var partLimitedMax = parts.length > 0 ? Math.floor((MAX_CREEP_SIZE - singleParts.length) / parts.length) : maxMultiplier;
 		maxMultiplier = Math.min(maxMultiplier, partLimitedMax);
 		if (minMultiplier > maxMultiplier || maxMultiplier < 1) {
+			return null;
+		}
+		if (this._fullSizeCost(spawn, costs, singleCosts, minMultiplier, maxMultiplier) > spawn.room.energyAvailable && this._shouldWaitForEnergy(options)) {
+			options.waitingForEnergy = true;
 			return null;
 		}
 		if (minMultiplier * costs + singleCosts > spawn.room.energyAvailable) {
@@ -739,6 +736,32 @@ class RolePrototype {
 		}
 
 		return singleParts.concat(this._replicateParts(parts, multiplier));
+	}
+
+	/*
+	 * What the largest body the room could ever pay for would cost. A creep lives for 1500
+	 * ticks, so building one small because of a low-energy moment is an expensive mistake.
+	 */
+
+	_fullSizeCost(spawn, costs, singleCosts, minMultiplier, maxMultiplier) {
+		var capacity = Math.max(spawn.room.energyCapacityAvailable || 0, spawn.room.energyAvailable);
+		var multiplier = minMultiplier;
+		while (multiplier < maxMultiplier && (multiplier + 1) * costs + singleCosts <= capacity) {
+			multiplier++;
+		}
+		return multiplier * costs + singleCosts;
+	}
+
+	/*
+	 * Only the spawn queue allows waiting, and only for a bounded time. Everything else, such
+	 * as recovery and console commands, spawns with what is there right now.
+	 */
+
+	_shouldWaitForEnergy(options) {
+		if (!options.mayWait) return false;
+		var waits = MainHeap.namespace('spawnWait');
+		if (!waits[options.baseName]) waits[options.baseName] = Game.time;
+		return Game.time - waits[options.baseName] < config.SPAWN.MAX_WAIT_TICKS;
 	}
 
 	/*
@@ -758,7 +781,19 @@ class RolePrototype {
 	 */
 
 	_getPartsMaxMultiplier(spawn) {
-		return (spawn.room.memory.base && spawn.room.memory.base.roleConfig && spawn.room.memory.base.roleConfig.partsMaxMultiplier) || 5;
+		var manualLimit = spawn.room.memory.base && spawn.room.memory.base.roleConfig && spawn.room.memory.base.roleConfig.partsMaxMultiplier;
+		return manualLimit || this._getUsefulBodyUnits(spawn.room);
+	}
+
+	/*
+	 * How many body repeats this role can make use of. Roles override this where it follows from
+	 * the room; what the room can afford and the 50 part limit are applied on top.
+	 *
+	 * @param {Room} room
+	 */
+
+	_getUsefulBodyUnits(room) {
+		return config.BODY.DEFAULT_UNITS;
 	}
 
 	/*

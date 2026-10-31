@@ -3,13 +3,21 @@
  */
  
 var MainCache = require('./main.cache');
+var EconomyManager = require('./manager.economy');
 var RolePrototype = require('./role.prototype');
  
 class Builder extends RolePrototype {
 
 	constructor() {
 		super('Builder', '#ffff00', '🔨');
-	    this.priority = 70; 
+	}
+
+	getDemand(room) {
+		return EconomyManager.getDesiredBuilders(room);
+	}
+
+	_getUsefulBodyUnits(room) {
+		return EconomyManager.getBuilderWorkParts(room);
 	}
 
 	/*
@@ -21,7 +29,22 @@ class Builder extends RolePrototype {
     }
     
     /*
-     * Valid targets are construction sites. 
+     * Stays on one site until it is done. Re-sorting every tick makes a Builder hop between
+     * sites, and each hop wastes the walk.
+     */
+
+    _findClosestTarget(creep) {
+    	if (creep.memory.target) return super._findClosestTarget(creep);
+    	var current = creep.memory.buildTarget && Game.getObjectById(creep.memory.buildTarget);
+    	if (current) return current;
+    	var target = super._findClosestTarget(creep);
+    	if (target) creep.memory.buildTarget = target.id;
+    	else if (creep.memory.buildTarget) delete creep.memory.buildTarget;
+    	return target;
+    }
+
+    /*
+     * Valid targets are construction sites.
      */
     
     _findTargets(room) {

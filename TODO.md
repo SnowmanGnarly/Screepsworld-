@@ -41,12 +41,12 @@
   ```
 - [x] Auto-generate high-priority delivery requests:
   - [x] Spawn & Extension refills (`priority: 100`)
-  - [x] Towers under invasion or below 500 energy (`priority: 90 - 95`)
+  - [x] Towers under invasion (`priority: 95`) or with 200 energy free (`priority: 60`)
   - [x] Labs needing energy or reaction reagents (`priority: 60 - 70`)
 - [x] Auto-generate supply collection requests:
   - [x] Dropped resource piles $> 100$ amount (`priority: 80`)
   - [x] Source containers $> 400$ energy (`priority: 75`)
-  - [x] Full mineral containers, factory output, or lab products (`priority: 65`)
+  - [x] Full mineral containers (`priority: 75`), lab products (`priority: 65`), factory output (`priority: 60`)
 - [x] Migrate `role.courier.js` to handle any resource type dynamically from `LogisticsManager`.
 - [x] Migrate `role.storekeeper.js` to execute prioritized energy logistics tasks.
 - [ ] Implement multi-room hauler dispatching when storage holds $> 100,000$ surplus energy.
@@ -68,7 +68,7 @@
   - [x] Place `STRUCTURE_TERMINAL` adjacent to storage.
   - [x] Cluster `STRUCTURE_LAB` within reaction range ($\le 2$ tiles).
   - [x] Position `STRUCTURE_LINK` adjacent to sources, controller, and storage.
-- [ ] Add dynamic distance transform matrix to optimize bunker layouts.
+- [x] Add dynamic distance transform matrix to optimize bunker layouts.
 
 ---
 
@@ -80,18 +80,19 @@
   - [x] On-demand defenders: dynamically spawn `role.defender.js` during peacetime ($0$ creeps maintained; auto-spawns upon hostile detection).
   - [x] Tower energy reserves: preserve $\ge 200$ energy for combat; prevent non-essential repairs during battle.
   - [x] Safe Mode safeguard: activate safe mode as a last resort if hostiles breach within 3 tiles of spawn/storage and ramparts fail.
+- [x] Minimum-cut rampart line around the planned base, opt-in through `enableFortification` (`main.mincut.js`). Not proven against a real siege.
 - [ ] Add rampart defense matrix with progressive hit leveling ($10\text{k} \rightarrow 100\text{k} \rightarrow 1\text{M} \rightarrow 10\text{M}$).
 
 ---
 
 ### 4. Remote Mining & Controller Reservation
 - [x] Create `role.scout.js` for lightweight room scouting and intel gathering.
-- [x] Create `role.reserver.js` with `[CLAIM, MOVE]` parts to reserve neutral rooms (restoring source output to 3000 energy / 300 ticks).
+- [x] Create `role.reserver.js` with `[CLAIM, CLAIM, MOVE, MOVE]` parts, or `[CLAIM, MOVE]` below 1300 capacity, to reserve neutral rooms (restoring source output to 3000 energy / 300 ticks).
 - [x] Create `role.remoteMiner.js` with mission-sized bodies for mining near remote source containers.
 - [x] Create `role.remoteHauler.js` with demand-sized bodies for routes between remote containers and home storage.
 - [x] Implement `manager.remote.js` to compute bounded Net ROI:
   $$\Delta E = E_{\text{harvested}} - (E_{\text{miner}} + E_{\text{hauler}} + E_{\text{reserver}} + E_{\text{repairs}} + E_{\text{defense}})$$
-  Automatically suspend or blacklist rooms with sustained losses, active invader cores, or player harassment.
+  Automatically suspend or blacklist rooms with sustained losses or player harassment. Repair and defense costs are not counted yet, and invader cores do not suspend a mission.
 - [x] Plan bounded remote construction and exact mission spawns, with coverage in `test/remote.regression.test.js`.
 
 ---
@@ -105,7 +106,9 @@
   - [x] Implement bounded ordered base/T1/T2/T3 reaction chains driven by storage/terminal/lab inventory and strategic reserves.
   - [x] Integrate with `manager.logistics.js` for exact energy/reagent loading, product collection, and drain-before-reassignment.
 - [x] Implement opt-in boost requests with stocked-lab preflight, resource reservations, post-spawn boosting, cleanup, and emergency recovery bypass.
-- [x] Cover mineral harvesting in `test/mineral.regression.test.js`, reactions/logistics in `test/lab.regression.test.js`, and boosts in `test/boost.regression.test.js`.
+- [x] Rank goals from spawn-time boost demand, manual goals, and opt-in market profit (`lab.matrix.js`), with per-resource backoff for goals that stall.
+- [x] Pre-load compounds for `required` boost policies from storage or terminal before the creep spawns.
+- [x] Cover mineral harvesting in `test/mineral.regression.test.js`, reactions/logistics in `test/lab.regression.test.js`, boosts in `test/boost.regression.test.js`, ranking in `test/matrix.regression.test.js`, and pre-loading in `test/preload.regression.test.js`.
 
 ---
 
@@ -172,6 +175,6 @@
    - Every job in `main.js` is isolated by `main.scheduler.js`; a spawning error cannot stop towers, links, or creeps.
    - Emergency Harvester recovery triggers automatically if all creeps die and energy $\ge 200$.
 4. **Defensive Programming**:
-   - All room and structure lookups guarded against visionless rooms (`Game.getObjectById` null checks).
+   - Room and structure lookups in the managers are guarded against visionless rooms (`Game.getObjectById` null checks).
    - Safe role iteration preventing uncaught `TypeError` propagation.
 

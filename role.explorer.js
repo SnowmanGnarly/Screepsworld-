@@ -27,17 +27,17 @@ class Explorer extends RolePrototype {
 	}
 
 	_findTargets(room) {
-	    return MainUtil.findAllFlags().slice();
+	    return MainUtil.findAllFlags().filter(flag => !MainUtil.isRemoteFlag(flag));
 	}
 	
-	spawnCreep(spawn) {
+	spawnCreep(spawn, options = {}) {
 		var claimedFlags = MainUtil.findAllCreeps()
 			.filter(creep => creep.memory.role == 'Explorer')
 			.map(creep => creep.memory.targetFlag || creep.memory.target)
 			.filter(flagName => !!flagName);
-		var allFlags = MainUtil.findAllFlags().filter(flag => !claimedFlags.includes(flag.name));
+		var allFlags = this._findTargets(spawn.room).filter(flag => !claimedFlags.includes(flag.name));
 		if (allFlags.length > 0)
-			return this._spawnCreepFromSpawn(spawn, allFlags[0].name);
+			return this._spawnCreepFromSpawn(spawn, allFlags[0].name, options);
 		return false;
 	}
 
@@ -56,8 +56,8 @@ class Explorer extends RolePrototype {
 	    return resultingCreep;
 	}
 
-	_spawnCreepFromSpawn(spawn, flagName) {
-	    var resultingCreep = this._spawnCreepWithParts(spawn, [WORK, MOVE, CARRY, MOVE], [ CLAIM, MOVE ]);
+	_spawnCreepFromSpawn(spawn, flagName, options = {}) {
+	    var resultingCreep = this._spawnCreepWithParts(spawn, [WORK, MOVE, CARRY, MOVE], [ CLAIM, MOVE ], options);
 	    if (resultingCreep) {
 	        resultingCreep.memory.targetFlag = flagName;
 	        resultingCreep.memory.target = null;

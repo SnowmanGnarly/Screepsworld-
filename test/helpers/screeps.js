@@ -45,7 +45,7 @@ const constants = {
     TOWER_ENERGY_COST: 10, TOWER_POWER_ATTACK: 600, TOWER_OPTIMAL_RANGE: 5, TOWER_FALLOFF_RANGE: 20, TOWER_FALLOFF: 0.75,
     TERRAIN_MASK_WALL: 1, TERRAIN_MASK_SWAMP: 2, HEAL_POWER: 12, RANGED_HEAL_POWER: 4,
     MAX_CREEP_SIZE: 50, CREEP_LIFE_TIME: 1500, CREEP_CLAIM_LIFE_TIME: 600, CREEP_SPAWN_TIME: 3, CARRY_CAPACITY: 50,
-    HARVEST_POWER: 2, BUILD_POWER: 5, ENERGY_REGEN_TIME: 300, SOURCE_ENERGY_CAPACITY: 3000, SOURCE_ENERGY_NEUTRAL_CAPACITY: 1500,
+    CONTROLLER_MAX_UPGRADE_PER_TICK: 15, HARVEST_POWER: 2, BUILD_POWER: 5, ENERGY_REGEN_TIME: 300, SOURCE_ENERGY_CAPACITY: 3000, SOURCE_ENERGY_NEUTRAL_CAPACITY: 1500,
     REACTIONS: {
         hydrogen: { oxygen: 'hydroxide' },
         oxygen: { hydrogen: 'hydroxide', utrium: 'utrium_oxide', zynthium: 'zynthium_oxide', ghodium: 'ghodium_oxide' },
@@ -93,6 +93,9 @@ const constants = {
     },
 };
 
+// the engine's own values win over anything hand-written above
+Object.assign(constants, require('./engine-constants'));
+
 Object.assign(global, constants);
 
 class MockRoomPosition {
@@ -110,8 +113,9 @@ class MockRoomPosition {
         return Math.max(Math.abs(this.x - x), Math.abs(this.y - otherY));
     }
 
-    inRangeTo(target, range) {
-        return this.getRangeTo(target) <= range;
+    // the game takes either (target, range) or (x, y, range)
+    inRangeTo(first, second, third) {
+        return third === undefined ? this.getRangeTo(first) <= second : this.getRangeTo(first, second) <= third;
     }
 
     isNearTo(target) {
@@ -161,15 +165,17 @@ class MockRoomPosition {
 function makeStore(capacity, contents = {}, resourceCapacities = null) {
     const store = { ...contents };
     Object.defineProperties(store, {
-        _capacity: { value: capacity, writable: true },
-        _resourceCapacities: { value: resourceCapacities },
+        _capacity: { value: capacity, writable: true, configurable: true },
+        _resourceCapacities: { value: resourceCapacities, configurable: true },
         getUsedCapacity: {
+            configurable: true,
             value(resourceType) {
                 if (resourceType) return store[resourceType] || 0;
                 return Object.keys(store).reduce((sum, key) => sum + (typeof store[key] === 'number' ? store[key] : 0), 0);
             },
         },
         getFreeCapacity: {
+            configurable: true,
             value(resourceType) {
                 if (store._resourceCapacities && resourceType) {
                     const capacity = resourceType === RESOURCE_ENERGY ? store._resourceCapacities.energy : store._resourceCapacities.mineral;
@@ -179,6 +185,7 @@ function makeStore(capacity, contents = {}, resourceCapacities = null) {
             },
         },
         set: {
+            configurable: true,
             value(resourceType, amount) {
                 if (amount > 0) store[resourceType] = amount;
                 else delete store[resourceType];
@@ -209,6 +216,10 @@ function makeRoom(name, options = {}) {
         },
         lookAt() {
             return [];
+        },
+        // no path by default, so creeps fall through to moveTo, which most tests assert on
+        findPath() {
+            return '';
         },
     };
 }
@@ -246,7 +257,7 @@ function makeTerminal(room, options = {}) {
     terminal.send = function (resourceType, amount, targetRoomName, description) {
         if (this.cooldown > 0) return ERR_TIRED;
         if (!targetRoomName || amount <= 0) return ERR_INVALID_ARGS;
-        const fee = Game.market.calcTransactionCost(amount, room.name, targetRoomName);
+        const fee = Game.market.calcTransactionCost(amount, this.room.name, targetRoomName);
         const energyCost = fee + (resourceType === RESOURCE_ENERGY ? amount : 0);
         if (this.store.getUsedCapacity(resourceType) < amount || this.store.getUsedCapacity(RESOURCE_ENERGY) < energyCost) {
             return ERR_NOT_ENOUGH_RESOURCES;
@@ -311,7 +322,7 @@ function makeLab(room, options = {}) {
     });
     Object.defineProperty(lab, 'mineralType', {
         get() {
-            return Object.keys(lab.store).find(resourceType => resourceType !== RESOURCE_ENERGY && lab.store[resourceType] > 0) || null;
+            return Object.keys(this.store).find(resourceType => resourceType !== RESOURCE_ENERGY && this.store[resourceType] > 0) || null;
         },
     });
     lab.runReaction = function (inputA, inputB) {
@@ -335,11 +346,11 @@ function makeLab(room, options = {}) {
         if (this.cooldown > 0) return ERR_TIRED;
         if (this.pos.getRangeTo(creep) > 1) return ERR_NOT_IN_RANGE;
         const resourceType = this.mineralType;
-        const recipe = resourceType && BOOSTS[resourceType];
-        if (!recipe) return ERR_NOT_ENOUGH_RESOURCES;
+        const boosts = type => Boolean(BOOSTS[type] && BOOSTS[type][resourceType]);
+        if (!resourceType) return ERR_NOT_ENOUGH_RESOURCES;
         const eligible = creep.body.filter(part => {
             const type = typeof part === 'string' ? part : part.type;
-            return recipe[type] && (typeof part === 'string' || !part.boost);
+            return boosts(type) && (typeof part === 'string' || !part.boost);
         });
         const count = bodyPartsCount === undefined ? eligible.length : Math.min(bodyPartsCount, eligible.length);
         if (count <= 0) return ERR_NO_BODYPART;
@@ -350,7 +361,7 @@ function makeLab(room, options = {}) {
         let remaining = count;
         creep.body = creep.body.map(part => {
             const type = typeof part === 'string' ? part : part.type;
-            if (remaining > 0 && recipe[type] && (typeof part === 'string' || !part.boost)) {
+            if (remaining > 0 && boosts(type) && (typeof part === 'string' || !part.boost)) {
                 remaining--;
                 return Object.assign({}, typeof part === 'object' ? part : {}, { type, boost: resourceType });
             }
@@ -376,121 +387,125 @@ function makeCreep(room, options = {}) {
         hitsMax: options.hitsMax || 1000,
         owner: options.owner || { username: 'Me' },
         getActiveBodyparts(type) {
-            return creep.body.filter(part => (part === type || part.type === type) && (typeof part === 'string' || part.hits !== 0)).length;
+            return this.body.filter(part => (part === type || part.type === type) && (typeof part === 'string' || part.hits !== 0)).length;
         },
         moveTo(target, moveOptions) {
-            creep.lastMoveTo = target;
-            creep.moveOptions = moveOptions;
+            this.lastMoveTo = target;
+            this.moveOptions = moveOptions;
+            return OK;
+        },
+        moveByPath(path) {
+            this.followedPath = path;
             return OK;
         },
         withdraw(source, resourceType, amount) {
-            if (creep.pos.getRangeTo(source) > 1) return ERR_NOT_IN_RANGE;
+            if (this.pos.getRangeTo(source) > 1) return ERR_NOT_IN_RANGE;
             const available = source.store ? source.store.getUsedCapacity(resourceType) : 0;
-            const count = Math.min(amount === undefined ? available : amount, available, creep.store.getFreeCapacity(resourceType));
+            const count = Math.min(amount === undefined ? available : amount, available, this.store.getFreeCapacity(resourceType));
             if (count <= 0) return ERR_NOT_ENOUGH_RESOURCES;
             source.store.set(resourceType, source.store[resourceType] - count);
-            creep.store.set(resourceType, (creep.store[resourceType] || 0) + count);
+            this.store.set(resourceType, (this.store[resourceType] || 0) + count);
             return OK;
         },
         transfer(target, resourceType, amount) {
-            if (creep.pos.getRangeTo(target) > 1) return ERR_NOT_IN_RANGE;
-            const available = creep.store.getUsedCapacity(resourceType);
+            if (this.pos.getRangeTo(target) > 1) return ERR_NOT_IN_RANGE;
+            const available = this.store.getUsedCapacity(resourceType);
             const free = target.store.getFreeCapacity(resourceType);
             if (free <= 0) return ERR_FULL;
             const count = Math.min(amount === undefined ? available : amount, available, free);
             if (count <= 0) return ERR_NOT_ENOUGH_RESOURCES;
-            creep.store.set(resourceType, available - count);
+            this.store.set(resourceType, available - count);
             target.store.set(resourceType, (target.store[resourceType] || 0) + count);
             return OK;
         },
         pickup(source) {
-            if (creep.pos.getRangeTo(source) > 1) return ERR_NOT_IN_RANGE;
+            if (this.pos.getRangeTo(source) > 1) return ERR_NOT_IN_RANGE;
             const resourceType = source.resourceType;
-            const count = Math.min(source.amount, creep.store.getFreeCapacity(resourceType));
+            const count = Math.min(source.amount, this.store.getFreeCapacity(resourceType));
             if (count <= 0) return ERR_FULL;
             source.amount -= count;
-            creep.store.set(resourceType, (creep.store[resourceType] || 0) + count);
+            this.store.set(resourceType, (this.store[resourceType] || 0) + count);
             return OK;
         },
         harvest(source) {
-            if (creep.pos.getRangeTo(source) > 1) return ERR_NOT_IN_RANGE;
-            const workParts = creep.getActiveBodyparts(WORK);
+            if (this.pos.getRangeTo(source) > 1) return ERR_NOT_IN_RANGE;
+            const workParts = this.getActiveBodyparts(WORK);
             if (workParts === 0) return ERR_NO_BODYPART;
             if (source.mineralType) {
-                const mineralRoom = source.room || room;
+                const mineralRoom = source.room || this.room;
                 const extractor = mineralRoom.find(FIND_MY_STRUCTURES).find(structure => {
                     return structure.structureType === STRUCTURE_EXTRACTOR && structure.pos.isEqualTo(source.pos);
                 });
                 if (!extractor) return ERR_NOT_FOUND;
                 if (extractor.cooldown > 0) return ERR_TIRED;
                 const available = source.mineralAmount || 0;
-                const count = Math.min(workParts * HARVEST_MINERAL_POWER, available, creep.store.getFreeCapacity(source.mineralType));
+                const count = Math.min(workParts * HARVEST_MINERAL_POWER, available, this.store.getFreeCapacity(source.mineralType));
                 if (count <= 0) return ERR_NOT_ENOUGH_RESOURCES;
                 source.mineralAmount = available - count;
                 if (source.mineralAmount === 0) source.ticksToRegeneration = 50;
                 extractor.cooldown = EXTRACTOR_COOLDOWN;
-                creep.store.set(source.mineralType, creep.store.getUsedCapacity(source.mineralType) + count);
+                this.store.set(source.mineralType, this.store.getUsedCapacity(source.mineralType) + count);
                 return OK;
             }
             const resourceType = source.resourceType || RESOURCE_ENERGY;
             const available = source.energy === undefined ? (source.amount === undefined ? 3000 : source.amount) : source.energy;
-            const count = Math.min(workParts * 2, available, creep.store.getFreeCapacity(resourceType));
+            const count = Math.min(workParts * 2, available, this.store.getFreeCapacity(resourceType));
             if (count <= 0) return ERR_NOT_ENOUGH_RESOURCES;
             if (source.energy !== undefined) source.energy = available - count;
             else source.amount = available - count;
-            creep.store.set(resourceType, (creep.store[resourceType] || 0) + count);
+            this.store.set(resourceType, (this.store[resourceType] || 0) + count);
             return OK;
         },
         drop(resourceType) {
-            const amount = creep.store.getUsedCapacity(resourceType);
+            const amount = this.store.getUsedCapacity(resourceType);
             if (amount <= 0) return ERR_NOT_ENOUGH_RESOURCES;
-            const drop = { id: 'drop-' + Math.random().toString(36).slice(2), room, pos: creep.pos, resourceType, amount };
-            creep.store.set(resourceType, 0);
-            room._find[FIND_DROPPED_RESOURCES] = room._find[FIND_DROPPED_RESOURCES] || [];
-            room._find[FIND_DROPPED_RESOURCES].push(drop);
-            registerObject(drop, room.name);
+            const drop = { id: 'drop-' + Math.random().toString(36).slice(2), room: this.room, pos: this.pos, resourceType, amount };
+            this.store.set(resourceType, 0);
+            this.room._find[FIND_DROPPED_RESOURCES] = this.room._find[FIND_DROPPED_RESOURCES] || [];
+            this.room._find[FIND_DROPPED_RESOURCES].push(drop);
+            registerObject(drop, this.room.name);
             return OK;
         },
         build(site) {
-            if (creep.pos.getRangeTo(site) > 3) return ERR_NOT_IN_RANGE;
-            const workParts = creep.getActiveBodyparts(WORK);
+            if (this.pos.getRangeTo(site) > 3) return ERR_NOT_IN_RANGE;
+            const workParts = this.getActiveBodyparts(WORK);
             if (workParts === 0) return ERR_NO_BODYPART;
-            const progress = Math.min(workParts * 5, creep.store.getUsedCapacity(RESOURCE_ENERGY), site.progressTotal - site.progress);
+            const progress = Math.min(workParts * 5, this.store.getUsedCapacity(RESOURCE_ENERGY), site.progressTotal - site.progress);
             if (progress <= 0) return ERR_NOT_ENOUGH_RESOURCES;
             site.progress += progress;
-            creep.store.set(RESOURCE_ENERGY, creep.store.getUsedCapacity(RESOURCE_ENERGY) - progress);
+            this.store.set(RESOURCE_ENERGY, this.store.getUsedCapacity(RESOURCE_ENERGY) - progress);
             return OK;
         },
         attack(target) {
-            if (creep.pos.getRangeTo(target) > 1) return ERR_NOT_IN_RANGE;
-            creep.attacked = target;
+            if (this.pos.getRangeTo(target) > 1) return ERR_NOT_IN_RANGE;
+            this.attacked = target;
             return OK;
         },
         rangedAttack(target) {
-            if (creep.pos.getRangeTo(target) > 3) return ERR_NOT_IN_RANGE;
-            creep.rangedAttacked = target;
+            if (this.pos.getRangeTo(target) > 3) return ERR_NOT_IN_RANGE;
+            this.rangedAttacked = target;
             return OK;
         },
         heal(target) {
-            if (creep.pos.getRangeTo(target) > 1) return ERR_NOT_IN_RANGE;
-            creep.healed = target;
-            target.hits = Math.min(target.hitsMax, target.hits + creep.getActiveBodyparts(HEAL) * 12);
+            if (this.pos.getRangeTo(target) > 1) return ERR_NOT_IN_RANGE;
+            this.healed = target;
+            target.hits = Math.min(target.hitsMax, target.hits + this.getActiveBodyparts(HEAL) * 12);
             return OK;
         },
         reserveController(controller) {
-            if (creep.pos.getRangeTo(controller) > 1) return ERR_NOT_IN_RANGE;
-            creep.reserved = controller;
-            controller.reservation = { username: creep.owner.username, ticksToEnd: 1 };
+            if (this.pos.getRangeTo(controller) > 1) return ERR_NOT_IN_RANGE;
+            this.reserved = controller;
+            controller.reservation = { username: this.owner.username, ticksToEnd: 1 };
             return OK;
         },
         claimController(controller) {
-            if (creep.pos.getRangeTo(controller) > 1) return ERR_NOT_IN_RANGE;
+            if (this.pos.getRangeTo(controller) > 1) return ERR_NOT_IN_RANGE;
             controller.my = true;
             return OK;
         },
         upgradeController(controller) {
-            if (creep.pos.getRangeTo(controller) > 3) return ERR_NOT_IN_RANGE;
-            creep.upgraded = controller;
+            if (this.pos.getRangeTo(controller) > 3) return ERR_NOT_IN_RANGE;
+            this.upgraded = controller;
             return OK;
         },
         say() {},
@@ -506,7 +521,7 @@ function makeSpawn(room, options = {}) {
         spawning: null,
         pos: options.pos || makePosition(room, 25, 25),
         spawnCreep(body, name, options) {
-            const creep = makeCreep(room, { name, body, memory: options.memory, spawning: true });
+            const creep = makeCreep(this.room, { name, body, memory: options.memory, spawning: true });
             Game.creeps[name] = creep;
             this.spawning = creep;
             return OK;
@@ -639,6 +654,73 @@ function registerObject(object, roomName) {
     return object;
 }
 
+const STALE_OBJECT = new Proxy({}, {
+    get(target, key) {
+        if (typeof key === 'symbol') return undefined;
+        throw new Error('Stale game object read across ticks: ' + key);
+    },
+    set(target, key) {
+        throw new Error('Stale game object written across ticks: ' + String(key));
+    },
+});
+
+function isStore(value) {
+    return Boolean(value) && typeof value === 'object' && Object.prototype.hasOwnProperty.call(value, '_capacity');
+}
+
+function collectGameObjects() {
+    const found = new Set();
+    const add = object => {
+        if (!object || typeof object !== 'object') return;
+        found.add(object);
+        if (isStore(object.store)) found.add(object.store);
+    };
+    Object.values(Game.rooms).forEach(room => {
+        add(room);
+        [room.controller, room.storage, room.terminal].forEach(add);
+        Object.values(room._find).forEach(values => values.forEach(add));
+        room.createdSites.forEach(add);
+    });
+    [Game.creeps, Game.spawns, Game.flags, Game.objects].forEach(group => Object.values(group).forEach(add));
+    return found;
+}
+
+/*
+ * What the engine does between ticks: every game object and its store becomes a new instance, while
+ * Memory and positions carry over. Old instances throw when used, so code that kept one across ticks
+ * fails loudly here instead of quietly reading stale values as it would on a live shard. Tests have
+ * to fetch objects from Game again after calling this.
+ */
+
+function rebuildGameObjects() {
+    const fresh = new Map();
+    collectGameObjects().forEach(object => {
+        fresh.set(object, isStore(object)
+            ? makeStore(object._capacity, { ...object }, object._resourceCapacities)
+            : Object.create(Object.getPrototypeOf(object), Object.getOwnPropertyDescriptors(object)));
+    });
+    const relink = value => (fresh.has(value) ? fresh.get(value) : Array.isArray(value) ? value.map(relink) : value);
+    fresh.forEach((copy, old) => {
+        if (isStore(old)) return;
+        Object.keys(copy).forEach(key => {
+            const descriptor = Object.getOwnPropertyDescriptor(copy, key);
+            if (descriptor.get || !descriptor.writable) return;
+            copy[key] = relink(copy[key]);
+        });
+        if (copy._find) {
+            copy._find = Object.fromEntries(Object.entries(copy._find).map(([type, values]) => [type, relink(values)]));
+        }
+    });
+    [Game.rooms, Game.creeps, Game.spawns, Game.flags, Game.objects].forEach(group => {
+        Object.keys(group).forEach(key => { group[key] = relink(group[key]); });
+    });
+    fresh.forEach((copy, old) => {
+        Reflect.ownKeys(old).forEach(key => Reflect.deleteProperty(old, key));
+        Object.setPrototypeOf(old, STALE_OBJECT);
+    });
+    MainCache.initRound([]);
+}
+
 module.exports = {
     constants,
     makeStore,
@@ -654,4 +736,5 @@ module.exports = {
     setFind,
     resetScreeps,
     registerObject,
+    rebuildGameObjects,
 };

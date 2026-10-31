@@ -3,6 +3,7 @@
 var MainCache = require('./main.cache');
 var LogisticsManager = require('./manager.logistics');
 var info = require('./main.info');
+var config = require('./main.config').LOGISTICS;
 
 class LogisticsRunner {
 
@@ -44,9 +45,13 @@ class LogisticsRunner {
         }
 
         var available = LogisticsManager.getResourceAmount(source, task.resourceType);
-        var amount = Math.min(available, task.remaining, (creep.store.getFreeCapacity(task.resourceType) || 0));
+        var wanted = LogisticsManager.getPickupAmount(creep.room, task);
+        var amount = Math.min(available, wanted, (creep.store.getFreeCapacity(task.resourceType) || 0));
         if (amount <= 0) {
-            task.retryAfter = Game.time + 5;
+            // nothing to collect here, so let go of the task rather than wait beside an empty store
+            task.retryAfter = Game.time + config.RETRY_TICKS;
+            LogisticsManager.releaseTask(creep.room, task.id);
+            delete (/** @type {any} */ (creep.memory)).taskId;
             return;
         }
 
@@ -61,6 +66,7 @@ class LogisticsRunner {
 
         if (result === OK) {
             task.lastProgress = Game.time;
+            task.claimedAmount = amount;
             return;
         }
         if (result === ERR_NOT_IN_RANGE) {
@@ -123,7 +129,7 @@ class LogisticsRunner {
      * @param {number} result
      */
     static _retry(task, result) {
-        task.retryAfter = Game.time + 5;
+        task.retryAfter = Game.time + config.RETRY_TICKS;
         task.state = 'open';
         if (result !== ERR_BUSY && result !== ERR_NOT_ENOUGH_RESOURCES && result !== ERR_TIRED) {
             info.warning('Logistics task ' + task.id + ' could not continue: ' + result);

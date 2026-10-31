@@ -7,6 +7,19 @@ var MainCache = require('./main.cache');
 class MainUtil {
 
 	/*
+	 * Forces a number from Memory or the console into a range. Anything that is not a number gets
+	 * the fallback.
+	 */
+
+	static clamp(value, minimum, maximum, fallback) {
+		value = Number(value);
+		if (value === Infinity) return maximum;
+		if (value === -Infinity) return minimum;
+		if (!Number.isFinite(value)) return fallback;
+		return Math.max(minimum, Math.min(maximum, value));
+	}
+
+	/*
 	 * Finds all spawns in the game and puts them in an array.
 	 */
     
@@ -36,6 +49,16 @@ class MainUtil {
     
 	static findAllFlags() {
 	    return MainCache.getFlags();
+	}
+
+	/*
+	 * Returns true for the 'Remote' and 'Remote:...' flags that configure remote missions.
+	 *
+	 * @param flag
+	 */
+
+	static isRemoteFlag(flag) {
+	    return /^remote(?:$|:)/i.test(flag.name);
 	}
 
 	/*
@@ -79,8 +102,8 @@ class MainUtil {
 		}
 		var memory = Memory.structures[structure.id];
 		structure.memory = memory;
-		memory._roomName = structure.room && structure.room.name ? structure.room.name : structure.pos && structure.pos.roomName;
-		memory._lastSeen = Game.time;
+		var roomName = structure.room && structure.room.name ? structure.room.name : structure.pos && structure.pos.roomName;
+		if (memory._roomName !== roomName) memory._roomName = roomName;
 		return memory;
 	}
 

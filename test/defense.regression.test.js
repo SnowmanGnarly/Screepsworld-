@@ -114,7 +114,7 @@ describe('Defense reliability regressions', function () {
         assert.equal(room.controller.activations, 1);
     });
 
-    it('lets a tower repair instead of attacking beyond effective range', function () {
+    it('fires at any range, because a tower still does its minimum damage past falloff', function () {
         const room = defenseRoom();
         const defenderTower = tower(room, makePosition(room, 10, 10));
         const rampart = makeStructure(room, STRUCTURE_RAMPART, {
@@ -126,8 +126,8 @@ describe('Defense reliability regressions', function () {
         setFind(room, FIND_MY_CREEPS, []);
         setFind(room, FIND_MY_SPAWNS, []);
         new TowerManager(room).runTowers();
-        assert.equal(defenderTower.attacks.length, 0);
-        assert.equal(defenderTower.repairs[0], rampart);
+        assert.equal(defenderTower.attacks[0], invader);
+        assert.equal(defenderTower.repairs.length, 0);
     });
 
     it('does not waste tower energy when enemy healing exceeds focused damage', function () {

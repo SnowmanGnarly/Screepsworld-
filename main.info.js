@@ -2,7 +2,9 @@
  * This module is used to display some information to the screen, so debugging is easier.
  */
  
+var MainHeap = require('./main.heap');
 var MainUtil = require('./main.util');
+var config = require('./main.config');
 
 class MainInfo {
 
@@ -24,7 +26,8 @@ class MainInfo {
 	 */
     
 	static _visualizeRoleInfos(room) {   
-        if (!room.memory.roleInfo)
+        var roleInfo = MainHeap.namespace('roleInfo')[room.name];
+        if (!roleInfo)
             return;
 
     	var console = MainInfo._fetchMemoryOfRoomConsole(room);
@@ -36,8 +39,8 @@ class MainInfo {
         
         var unusedRoles = '';
         
-        for (const role in room.memory.roleInfo) {
-            var count = room.memory.roleInfo[role];
+        for (const role in roleInfo) {
+            var count = roleInfo[role];
             if (count.currentNumber || (count.requiredNumber > 0)) {
             	var ofRequired = count.requiredNumber >= 0 ? '/' + count.requiredNumber : '';
                 room.visual.text(count.symbol + ' ' + role + ' ' + count.currentNumber + ofRequired, x, y++, {align: 'left', opacity: console.opacity});
@@ -125,6 +128,22 @@ class MainInfo {
     }
     
     /*
+	 * Sends an email for a problem that needs the owner, since nobody reads the console while away.
+	 * One problem sends at most one email per interval, and the game bundles what arrives in between.
+	 *
+	 * @param key names the problem
+	 * @param message
+	 */
+
+	static notify(key, message) {
+		var last = MainHeap.namespace('notified')[key];
+		if (last !== undefined && Game.time - last < config.CPU.NOTIFY_INTERVAL) return;
+		MainHeap.namespace('notified')[key] = Game.time;
+		var shard = Game.shard ? '[' + Game.shard.name + '] ' : '';
+		Game.notify(shard + message, config.CPU.NOTIFY_GROUP_MINUTES);
+	}
+
+	/*
 	 * Logs the string to the UI console.
 	 * 
 	 * @param the new line
@@ -132,7 +151,7 @@ class MainInfo {
 	 */
     
 	static log(newLine, room) {   
-		var displayLine = typeof newLine === 'object' && newLine !== null ? JSON.stringify(newLine) : newLine;
+		var displayLine = newLine instanceof Error ? String(newLine) : typeof newLine === 'object' && newLine !== null ? JSON.stringify(newLine) : newLine;
 		if (typeof displayLine !== 'string') {
 			displayLine = String(displayLine);
 		}

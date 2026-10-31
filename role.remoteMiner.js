@@ -6,7 +6,6 @@ class RemoteMiner extends RolePrototype {
 
     constructor() {
         super('RemoteMiner', '#ffaa00', '⛏️');
-        this.priority = -10;
         this._disableAutomaticLoot = true;
     }
 
@@ -31,7 +30,6 @@ class RemoteMiner extends RolePrototype {
             return;
         }
 
-        var before = creep.store.getUsedCapacity(RESOURCE_ENERGY);
         var harvestResult = ERR_NOT_ENOUGH_RESOURCES;
         if (creep.store.getFreeCapacity(RESOURCE_ENERGY) > 0 && source.energy > 0) {
             harvestResult = creep.harvest(source);
@@ -40,7 +38,8 @@ class RemoteMiner extends RolePrototype {
                 return;
             }
             if (harvestResult === OK) {
-                var harvested = creep.store.getUsedCapacity(RESOURCE_ENERGY) - before;
+                // a harvest only takes effect at the end of the tick, so the store cannot be measured after it
+                var harvested = Math.min(creep.getActiveBodyparts(WORK) * HARVEST_POWER, source.energy, creep.store.getFreeCapacity(RESOURCE_ENERGY));
                 RemoteManager.recordEnergyHarvested(creep.memory.missionId, harvested);
                 if (!creep.memory.ticksToSource) {
                     creep.memory.ticksToSource = creep.ticksToLive;
@@ -63,7 +62,7 @@ class RemoteMiner extends RolePrototype {
         var site = sites[0];
         var result = creep.build(site);
         if (result === ERR_NOT_IN_RANGE) this._moveToLocation(creep, site);
-        if (result === OK && site.progress + creep.getActiveBodyparts(WORK) * 5 >= site.progressTotal) {
+        if (result === OK && site.progress + creep.getActiveBodyparts(WORK) * BUILD_POWER >= site.progressTotal) {
             MainCache.invalidateRoom(creep.room, FIND_CONSTRUCTION_SITES);
             MainCache.invalidateRoom(creep.room, FIND_MY_CONSTRUCTION_SITES);
         }

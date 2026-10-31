@@ -3,6 +3,7 @@
  */
 
 var MainCache = require('./main.cache');
+var config = require('./main.config').DEFENSE;
 var RolePrototype = require('./role.prototype');
 var DefenseManager = require('./manager.defense');
 var RemoteManager = require('./manager.remote');
@@ -11,22 +12,32 @@ class Defender extends RolePrototype {
 
     constructor() {
         super('Defender', '#ff0000', '🛡️');
-        this.priority = 90;
+        this.defaultMaxNumber = config.MAX_LOCAL_DEFENDERS;
+        this.alwaysDerived = true; // turning off the economy's automation must never turn off defense
+    }
+
+    getDemand(room) {
+        return room.memory.defense ? room.memory.defense.desiredDefenders || 0 : 0;
+    }
+
+    // defenders are called for a threat, so a dying one is only replaced if the threat remains
+    needsReplacement(creep) {
+        return false;
     }
 
     isNecessary(room) {
-        return room.memory.defense && room.memory.defense.threatLevel >= 2;
+        return room.memory.defense && room.memory.defense.threatLevel >= config.DEFENDER_THREAT_LEVEL;
     }
 
-    spawnCreep(spawn) {
+    spawnCreep(spawn, options = {}) {
         var style = spawn.room.memory.defense && spawn.room.memory.defense.preferredStyle;
         if (style === 'ranged') {
-            return this._spawnCreepWithParts(spawn, [RANGED_ATTACK, MOVE]);
+            return this._spawnCreepWithParts(spawn, [RANGED_ATTACK, MOVE], [], options);
         }
         if (style === 'support') {
-            return this._spawnCreepWithParts(spawn, [HEAL, MOVE]);
+            return this._spawnCreepWithParts(spawn, [HEAL, MOVE], [], options);
         }
-        return this._spawnCreepWithParts(spawn, [TOUGH, ATTACK, MOVE, MOVE], [ATTACK, MOVE]);
+        return this._spawnCreepWithParts(spawn, [TOUGH, ATTACK, MOVE, MOVE], [ATTACK, MOVE], options);
     }
 
     _work(creep) {
@@ -58,7 +69,7 @@ class Defender extends RolePrototype {
         var mission = RemoteManager.getMission(creep.memory.missionId);
         var targetRoom = creep.memory.targetRoom;
         var target = creep.room.name === targetRoom ? DefenseManager.getPriorityTarget(creep.room) : null;
-        var threatLevel = target ? 2 : mission && mission.defense && mission.defense.threatLevel || 0;
+        var threatLevel = target ? config.DEFENDER_THREAT_LEVEL : mission && mission.defense && mission.defense.threatLevel || 0;
         if (creep.room.name === targetRoom && creep.room.memory.defense) {
             threatLevel = Math.max(threatLevel, creep.room.memory.defense.threatLevel || 0);
         }

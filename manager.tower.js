@@ -3,6 +3,7 @@
  */
 
 var constants = require('./main.constants');
+var config = require('./main.config');
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
 var DefenseManager = require('./manager.defense');
@@ -41,7 +42,7 @@ class TowerManager {
 
     _findEmergencyRepairs() {
         var lowRamparts = MainCache.find(this._room, FIND_MY_STRUCTURES, {
-            filter: structure => structure.structureType === STRUCTURE_RAMPART && structure.hits < 10000
+            filter: structure => structure.structureType === STRUCTURE_RAMPART && structure.hits < config.DEFENSE.EMERGENCY_RAMPART_HITS
         });
         if (lowRamparts.length > 0) return lowRamparts;
 
@@ -49,7 +50,7 @@ class TowerManager {
             filter: structure => {
                 return (structure.structureType === STRUCTURE_SPAWN ||
                     structure.structureType === STRUCTURE_TOWER || structure.structureType === STRUCTURE_STORAGE) &&
-                    structure.hits < structure.hitsMax * constants.TOWER_EMERGENCY_REPAIR_RATIO;
+                    structure.hits < structure.hitsMax * config.DEFENSE.TOWER_EMERGENCY_REPAIR_RATIO;
             }
         });
     }
@@ -64,7 +65,7 @@ class TowerManager {
             }
         }
 
-        var hasReserve = energy >= constants.TOWER_ENERGY_RESERVE + TOWER_ENERGY_COST;
+        var hasReserve = energy >= config.DEFENSE.TOWER_ENERGY_RESERVE + TOWER_ENERGY_COST;
         if (!hasReserve) return;
 
         if (damagedCreeps.length > 0) {

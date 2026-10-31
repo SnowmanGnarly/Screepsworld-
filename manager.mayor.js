@@ -7,8 +7,10 @@
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
 var constants = require('./main.constants');
+var config = require('./main.config');
 var info = require('./main.info');
 
+var EconomyManager = require('./manager.economy');
 var RoadManager = require('./manager.road');
 var RoomManager = require('./manager.room');
 
@@ -80,7 +82,7 @@ class MayorManager {
 		if (this._cache.myCreeps.length == 0) {
 			return;
 		}
-		if (this._room.memory.base.roleConfig.Builder && this._room.memory.base.roleConfig.Builder.requiredNumber == 0) {
+		if (!EconomyManager.isAutomatic(this._room, 'Builder') && this._room.memory.base.roleConfig.Builder && this._room.memory.base.roleConfig.Builder.requiredNumber == 0) {
 			return;
 		}
 
@@ -130,43 +132,30 @@ class MayorManager {
 		var roleConfig = this._room.memory.base.roleConfig;
 		if (!roleConfig) return;
 
+		// the room works out what it needs for itself, so these only matter to an operator running it by hand
+		var isMissing = roleName => !EconomyManager.isAutomatic(this._room, roleName) && roleConfig[roleName] && roleConfig[roleName].requiredNumber == 0 && roleConfig[roleName].auto !== false;
+
 		// Harvesters
-		if (roleConfig.Harvester && roleConfig.Harvester.requiredNumber == 0) {
-			this.errors.push({
-				text: 'Harvester is missing.',
-				solution: 'Spawning Harvester.',
-				act: () => roleConfig.Harvester.requiredNumber = 1,
-			});
+		if (isMissing('Harvester')) {
+			this.errors.push({ text: 'Harvester is missing.', solution: 'Set a Harvester count.' });
 		}
 
 		// Upgraders
-		if (roleConfig.Upgrader && roleConfig.Upgrader.requiredNumber == 0) {
-			this.errors.push({
-				text: 'Upgrader is missing.',
-				solution: 'Spawning Upgrader.',
-				act: () => roleConfig.Upgrader.requiredNumber = 1,
-			});
+		if (isMissing('Upgrader')) {
+			this.errors.push({ text: 'Upgrader is missing.', solution: 'Set an Upgrader count.' });
 		}
 
 		// Builders
-		if (this._cache.constructionSites.length > 0 && roleConfig.Builder && roleConfig.Builder.requiredNumber == 0) {
-			this.warnings.push({
-				text: 'Builder is missing.',
-				solution: 'Spawning Builder.',
-				act: () => roleConfig.Builder.requiredNumber = 1,
-			});
+		if (this._cache.constructionSites.length > 0 && isMissing('Builder')) {
+			this.warnings.push({ text: 'Builder is missing.', solution: 'Set a Builder count.' });
 		}
 
 		// Handymen
 		if (!this._cache.structures) {
 			this._cache.structures = MainCache.find(this._room, FIND_STRUCTURES, { filter: s => s.hits < s.hitsMax });
 		}
-		if (this._cache.structures.length > 0 && roleConfig.Handyman && roleConfig.Handyman.requiredNumber == 0) {
-			this.warnings.push({
-				text: 'Handyman is missing.',
-				solution: 'Spawning Handyman.',
-				act: () => roleConfig.Handyman.requiredNumber = 1,
-			});
+		if (this._cache.structures.length > 0 && isMissing('Handyman')) {
+			this.warnings.push({ text: 'Handyman is missing.', solution: 'Set a Handyman count.' });
 		}
 	}
 
@@ -193,14 +182,21 @@ class MayorManager {
 	 * Evaluates and plans structures based on Controller Level (RCL 1 - 8).
 	 */
 	_validateBuildings() {
+		var roomManager = new RoomManager(this._room);
+		this._planRamparts(roomManager);
+
 		// Limit active construction sites to avoid builder confusion
 		var notRoadConstructionSites = this._cache.constructionSites.filter(site => site.structureType != STRUCTURE_ROAD);
-		if (notRoadConstructionSites.length >= 2) {
+		if (notRoadConstructionSites.length >= config.PLANNER.MAX_OPEN_SITES) {
 			return;
 		}
 
-		var roomManager = new RoomManager(this._room);
 		var somethingWasBuilt = false;
+
+		// defense comes first, and everything after it is paid for by the income this adds
+		if (roomManager.fetchFreeBuildingSlots(RoomManager.TILE_TOWER) === 0 && this._queueSourceContainer()) {
+			return;
+		}
 
 		// Prioritized structure building list (RCL 1 - 8 unlocks)
 		for (var i = 0; i < RoomManager.TILES_TO_BE_BUILD.length; i++) {
@@ -209,10 +205,13 @@ class MayorManager {
 			var freeSlots = roomManager.fetchFreeBuildingSlots(tileToBeBuild.character);
 
 			if (freeSlots > 0) {
+				// a structure with no available tile must not hold up everything after it
+				var buildPosition = this._findBuildPosition(roomManager, tileToBeBuild);
+				if (!buildPosition) continue;
 				this.warnings.push({
 					text: 'Buildable structure ' + tileToBeBuild.structureType,
 					solution: 'I\'m building ' + tileToBeBuild.structureType,
-					act: () => this._buildStructure(roomManager, tileToBeBuild),
+					act: this._createBuildAction(buildPosition, tileToBeBuild),
 				});
 				somethingWasBuilt = true;
 				break;
@@ -237,29 +236,79 @@ class MayorManager {
 		}
 	}
 
+	_planRamparts(roomManager) {
+		if (!this._memory.enableFortification) return;
+		var level = this._room.controller ? this._room.controller.level : 0;
+		if (level < config.PLANNER.RAMPART_RCL || Game.cpu.bucket < config.PLANNER.RAMPART_PLAN_BUCKET) return;
+		roomManager.planRamparts();
+	}
+
 	_isStructureEnabled(structureType) {
 		if (structureType === STRUCTURE_NUKER) return !!this._memory.enableNuker;
+		// no code uses these yet, so they would only cost energy
+		if (structureType === STRUCTURE_POWER_SPAWN) return !!this._memory.enablePowerSpawn;
+		if (structureType === STRUCTURE_OBSERVER) return !!this._memory.enableObserver;
 		if (structureType === STRUCTURE_WALL || structureType === STRUCTURE_RAMPART) {
 			return !!this._memory.enableFortification;
 		}
 		return true;
 	}
 
-	_buildStructure(roomManager, tileToBeBuild) {
-		// 1. Check for dedicated architectural placement rules
-		var smartPos = this._findSmartPlacementPosition(tileToBeBuild.structureType);
-		if (smartPos) {
-			this._buildStructureAtPosition(smartPos, tileToBeBuild);
-			return;
-		}
-
-		// 2. Fallback to pre-drawn layout tiles
+	_findBuildPosition(roomManager, tileToBeBuild) {
+		// 1. The room's stored plan
 		var buildingPositions = this._fetchBuildingSitePositionsForTile(roomManager, tileToBeBuild);
-		if (buildingPositions.length > 0) {
-			this._buildStructureAtPosition(buildingPositions[0], tileToBeBuild);
-		} else {
-			info.warning("Could not find building position for " + tileToBeBuild.structureType, this._room);
+		if (buildingPositions.length > 0) return buildingPositions[0];
+
+		// 2. Placement rules, for what depends on sources and minerals or found no tile in the plan
+		return this._findSmartPlacementPosition(tileToBeBuild.structureType);
+	}
+
+	/*
+	 * A container beside each source is what makes static mining possible. EconomyManager then
+	 * asks for a Miner there and hauling capacity to empty it, without any console command.
+	 */
+
+	_queueSourceContainer() {
+		var level = this._room.controller ? this._room.controller.level : 0;
+		var limits = CONTROLLER_STRUCTURES[STRUCTURE_CONTAINER];
+		if (level < config.PLANNER.SOURCE_CONTAINER_RCL || !limits || !EconomyManager.isAutomatic(this._room, 'Miner')) return false;
+
+		var isContainer = object => object.structureType === STRUCTURE_CONTAINER;
+		var existing = MainCache.find(this._room, FIND_STRUCTURES).filter(isContainer).length;
+		var sites = MainCache.find(this._room, FIND_MY_CONSTRUCTION_SITES).filter(isContainer);
+		if (existing + sites.length >= (limits[level] || 0)) return false;
+
+		var source = MainCache.find(this._room, FIND_SOURCES).find(candidate => {
+			return !EconomyManager.hasDropoff(this._room, candidate) && !sites.some(site => site.pos.inRangeTo(candidate.pos, 1));
+		});
+		var position = source && this._findContainerPosition(source);
+		if (!position) return false;
+		this.warnings.push({
+			text: 'Source without a container',
+			solution: 'I\'m building a container beside the source',
+			act: this._createBuildAction(position, { structureType: STRUCTURE_CONTAINER }),
+		});
+		return true;
+	}
+
+	_findContainerPosition(source) {
+		var spawn = MainCache.find(this._room, FIND_MY_SPAWNS)[0];
+		var positions = [];
+		for (var dx = -1; dx <= 1; dx++) {
+			for (var dy = -1; dy <= 1; dy++) {
+				var x = source.pos.x + dx;
+				var y = source.pos.y + dy;
+				if ((dx === 0 && dy === 0) || x < 1 || x > 48 || y < 1 || y > 48) continue;
+				var position = new RoomPosition(x, y, this._room.name);
+				if (this._isPositionBuildable(position)) positions.push(position);
+			}
 		}
+		if (spawn) positions.sort((a, b) => spawn.pos.getRangeTo(a) - spawn.pos.getRangeTo(b));
+		return positions[0] || null;
+	}
+
+	_createBuildAction(buildPosition, tileToBeBuild) {
+		return () => this._buildStructureAtPosition(buildPosition, tileToBeBuild);
 	}
 
 	/*
@@ -308,20 +357,21 @@ class MayorManager {
 			return this._findClearTileAround(anchorFact, 1, 2);
 		}
 
-		// 6. Links: sources are senders; controller and storage are receivers
+		// 6. Links: the storage receiver first, because nothing a source sends reaches the room
+		// without it. Then the sources, and last the controller
 		if (structureType === STRUCTURE_LINK) {
 			var links = this._getStructuresAndSites(STRUCTURE_LINK);
+			if (this._room.storage && !this._hasLinkRoleNear(links, this._room.storage.pos, constants.LINK_TYPE_TARGET)) {
+				return this._placeLinkNear(this._room.storage.pos, constants.LINK_TYPE_TARGET);
+			}
 			var sources = MainCache.find(this._room, FIND_SOURCES);
 			for (var s = 0; s < sources.length; s++) {
 				if (!this._hasLinkRoleNear(links, sources[s].pos, constants.LINK_TYPE_SOURCE)) {
-					return this._placeLinkNear(sources[s].pos, constants.LINK_TYPE_SOURCE);
+					return this._placeSourceLink(sources[s]);
 				}
 			}
 			if (this._room.controller && !this._hasLinkRoleNear(links, this._room.controller.pos, constants.LINK_TYPE_TARGET)) {
 				return this._placeLinkNear(this._room.controller.pos, constants.LINK_TYPE_TARGET, 2);
-			}
-			if (this._room.storage && !this._hasLinkRoleNear(links, this._room.storage.pos, constants.LINK_TYPE_TARGET)) {
-				return this._placeLinkNear(this._room.storage.pos, constants.LINK_TYPE_TARGET);
 			}
 		}
 
@@ -372,8 +422,20 @@ class MayorManager {
 		return constants.LINK_TYPE_SOURCE;
 	}
 
-	_placeLinkNear(anchorPos, role, minRange = 1) {
-		var position = this._findClearTileAround(anchorPos, minRange, 2);
+	/*
+	 * A Miner stands on its container and can only reach what touches it, so the link goes there.
+	 */
+
+	_placeSourceLink(source) {
+		var container = MainCache.find(this._room, FIND_STRUCTURES).find(structure => {
+			return structure.structureType === STRUCTURE_CONTAINER && structure.pos.isNearTo(source.pos);
+		});
+		var isBesideContainer = position => !container || position.isNearTo(container.pos);
+		return this._placeLinkNear(source.pos, constants.LINK_TYPE_SOURCE, 1, isBesideContainer);
+	}
+
+	_placeLinkNear(anchorPos, role, minRange = 1, additionalFilter) {
+		var position = this._findClearTileAround(anchorPos, minRange, 2, additionalFilter);
 		if (position) {
 			this._getRoomManagerMemory().linkRoles[position.x + ',' + position.y] = role;
 		}
@@ -408,18 +470,33 @@ class MayorManager {
 	_getPlacementSnapshot() {
 		if (!this._placementSnapshot) {
 			var occupied = new Set();
+			var fortified = new Set();
 			MainCache.find(this._room, FIND_STRUCTURES).forEach(structure => {
 				occupied.add(structure.pos.x + ',' + structure.pos.y);
+				if (structure.structureType === STRUCTURE_RAMPART) fortified.add(structure.pos.x + ',' + structure.pos.y);
 			});
 			MainCache.find(this._room, FIND_CONSTRUCTION_SITES).forEach(site => {
 				occupied.add(site.pos.x + ',' + site.pos.y);
+				fortified.add(site.pos.x + ',' + site.pos.y);
 			});
 			this._placementSnapshot = {
 				terrain: this._room.getTerrain(),
 				occupied,
+				fortified,
 			};
 		}
 		return this._placementSnapshot;
+	}
+
+	/*
+	 * A rampart can stand on top of anything, and it has to: a road crossing the wall line that
+	 * counted as occupied would leave a permanent hole.
+	 */
+
+	_isRampartPlaceable(pos) {
+		var snapshot = this._getPlacementSnapshot();
+		if (snapshot.terrain.get(pos.x, pos.y) === TERRAIN_MASK_WALL) return false;
+		return !snapshot.fortified.has(pos.x + ',' + pos.y);
 	}
 
 	_isPositionBuildable(pos) {
@@ -430,8 +507,8 @@ class MayorManager {
 
 	_fetchBuildingSitePositionsForTile(roomManager, tileToBeBuild) {
 		var spawn = MainCache.find(this._room, FIND_MY_SPAWNS)[0];
-		var positions = roomManager.fetchBuildingSitePositionsForTile(tileToBeBuild.character)
-			.filter(pos => this._isPositionBuildable(pos));
+		var isPlaceable = tileToBeBuild.structureType === STRUCTURE_RAMPART ? pos => this._isRampartPlaceable(pos) : pos => this._isPositionBuildable(pos);
+		var positions = roomManager.fetchBuildingSitePositionsForTile(tileToBeBuild.character).filter(isPlaceable);
 		if (spawn) {
 			positions.sort((a, b) => spawn.pos.getRangeTo(a.x, a.y) - spawn.pos.getRangeTo(b.x, b.y));
 		}

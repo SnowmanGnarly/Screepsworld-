@@ -5,7 +5,6 @@ class Scout extends RolePrototype {
 
     constructor() {
         super('Scout', '#66ccff', '🔭');
-        this.priority = -20;
         this._disableAutomaticLoot = true;
     }
 

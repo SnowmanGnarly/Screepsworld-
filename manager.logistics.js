@@ -2,7 +2,12 @@ var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
 var info = require('./main.info');
 var TerminalManager = require('./manager.terminal');
+var config = require('./main.config').LOGISTICS;
+var economy = require('./main.config').ECONOMY;
+var constants = require('./main.constants');
+var EconomyManager = require('./manager.economy');
 
+const PRIORITY = config.PRIORITY;
 const TASK_CAP = 100;
 const KIND_SUPPLY = 'supply';
 const KIND_COLLECT = 'collect';
@@ -90,10 +95,24 @@ class LogisticsManager {
         return [this._room.name, task.sourceId, task.targetId, task.resourceType].join(':');
     }
 
+    _updateTaskId(task) {
+        task.id = this._getTaskId(task);
+        var creep = task.assignedCreep && Game.creeps[task.assignedCreep];
+        if (creep) creep.memory.taskId = task.id;
+    }
+
     _reconcileClaims() {
         this._memory.tasks.slice().forEach(task => {
             if (!task.assignedCreep) return;
             var creep = Game.creeps[task.assignedCreep];
+            if (creep && Game.time - task.lastProgress >= config.CLAIM_TIMEOUT) {
+                // whatever kept this hauler from the task, another may be able to do it
+                task.assignedCreep = null;
+                task.claimedAmount = 0;
+                task.retryAfter = Game.time + config.RETRY_TICKS;
+                delete creep.memory.taskId;
+                return;
+            }
             if (!creep) {
                 task.assignedCreep = null;
                 task.claimedAmount = 0;
@@ -158,7 +177,7 @@ class LogisticsManager {
             if (hub) {
                 task.targetId = hub.id;
                 task.targetRoomName = hub.room ? hub.room.name : this._room.name;
-                task.id = this._getTaskId(task);
+                this._updateTaskId(task);
             } else {
                 task.state = 'unavailable';
             }
@@ -171,7 +190,7 @@ class LogisticsManager {
             if (source) {
                 task.sourceId = source.id;
                 task.sourceRoomName = source.room ? source.room.name : this._room.name;
-                task.id = this._getTaskId(task);
+                this._updateTaskId(task);
             } else {
                 task.state = 'unavailable';
             }
@@ -235,7 +254,7 @@ class LogisticsManager {
                 this._removeTask(task.id);
                 return;
             }
-            var targetAmount = labMemory.targetAmount === undefined ? 1000 : Math.max(0, Number(labMemory.targetAmount) || 0);
+            var targetAmount = labMemory.targetAmount === undefined ? config.LAB_INPUT_DEFAULT : Math.max(0, Number(labMemory.targetAmount) || 0);
             var deficit = Math.max(0, targetAmount - target.store.getUsedCapacity(task.resourceType));
             task.remaining = Math.min(task.remaining, deficit);
             if (task.remaining <= 0) {
@@ -251,43 +270,54 @@ class LogisticsManager {
 
     _generateRequests() {
         if (this._room.memory.source && this._room.memory.target) {
-            this._createTask(this._room.memory.source, this._room.memory.target, RESOURCE_OXYGEN, 0, 80, KIND_ROUTE, true);
+            this._createTask(this._room.memory.source, this._room.memory.target, RESOURCE_OXYGEN, 0, PRIORITY.LEGACY_ROUTE, KIND_ROUTE, true);
         }
 
         var coreStructures = MainCache.find(this._room, FIND_MY_STRUCTURES, {
             filter: structure => (structure.structureType == STRUCTURE_SPAWN || structure.structureType == STRUCTURE_EXTENSION) &&
                 structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
         });
-        coreStructures.forEach(target => this._createSupplyTask(target, RESOURCE_ENERGY, 100));
+        coreStructures.forEach(target => this._createSupplyTask(target, RESOURCE_ENERGY, PRIORITY.CORE));
 
         var hostiles = MainCache.find(this._room, FIND_HOSTILE_CREEPS);
-        var towerPriority = hostiles.length > 0 ? 95 : 60;
+        var towerPriority = hostiles.length > 0 ? PRIORITY.TOWER_UNDER_ATTACK : PRIORITY.TOWER;
         var towers = MainCache.find(this._room, FIND_MY_STRUCTURES, {
-            filter: structure => structure.structureType == STRUCTURE_TOWER && structure.store.getFreeCapacity(RESOURCE_ENERGY) >= 200
+            filter: structure => structure.structureType == STRUCTURE_TOWER && structure.store.getFreeCapacity(RESOURCE_ENERGY) >= config.TOWER_REFILL_FREE
         });
         towers.forEach(target => this._createSupplyTask(target, RESOURCE_ENERGY, towerPriority));
 
+        // links beside a source are filled by Miners; hauling stored energy to them would only loop it back
+        var energySources = MainCache.find(this._room, FIND_SOURCES);
         var sourceLinks = MainCache.find(this._room, FIND_MY_STRUCTURES, {
-            filter: structure => structure.structureType == STRUCTURE_LINK && structure.memory && structure.memory.type == 'source' &&
-                structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0
+            filter: structure => structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == constants.LINK_TYPE_SOURCE &&
+                structure.store.getFreeCapacity(RESOURCE_ENERGY) > 0 &&
+                !energySources.some(source => structure.pos.inRangeTo(source.pos, economy.SOURCE_DROP_RANGE))
         });
-        sourceLinks.forEach(target => this._createSupplyTask(target, RESOURCE_ENERGY, 70));
+        sourceLinks.forEach(target => this._createSupplyTask(target, RESOURCE_ENERGY, PRIORITY.HUB_LINK));
+
+        // what the sources send arrives here, and it only reaches the room if someone carries it on
+        var hubLink = EconomyManager.getHubLink(this._room);
+        if (hubLink && hubLink.store.getUsedCapacity(RESOURCE_ENERGY) >= config.LINK_COLLECT_MIN) {
+            this._createCollectionTask(hubLink, RESOURCE_ENERGY, PRIORITY.HUB_LINK);
+        }
 
         var labs = MainCache.find(this._room, FIND_MY_STRUCTURES, {
             filter: structure => structure.structureType == STRUCTURE_LAB
         });
         labs.forEach(lab => {
             var memory = MainUtil.fetchMemoryOfStructure(lab);
+            // a required spawn is waiting on this lab, for its compound and its energy alike
+            var boosting = memory.labRole === 'boost';
             var energyFree = lab.store.getFreeCapacity(RESOURCE_ENERGY);
-            if (energyFree >= 400) this._createLabSupplyTask(lab, RESOURCE_ENERGY, 65, energyFree);
+            if (energyFree >= config.LAB_REFILL_FREE) this._createLabSupplyTask(lab, RESOURCE_ENERGY, boosting ? PRIORITY.LAB_BOOST : PRIORITY.LAB_ENERGY, energyFree);
             var inputResource = memory.inputResourceType || memory.resourceType;
-            var targetAmount = memory.targetAmount === undefined ? 1000 : Math.max(0, Number(memory.targetAmount) || 0);
+            var targetAmount = memory.targetAmount === undefined ? config.LAB_INPUT_DEFAULT : Math.max(0, Number(memory.targetAmount) || 0);
             var inputMissing = inputResource ? targetAmount - lab.store.getUsedCapacity(inputResource) : 0;
             if (inputResource && inputMissing > 0 && (!lab.mineralType || lab.mineralType === inputResource)) {
-                this._createLabSupplyTask(lab, inputResource, 60, inputMissing);
+                this._createLabSupplyTask(lab, inputResource, boosting ? PRIORITY.LAB_BOOST : PRIORITY.LAB_INPUT, inputMissing);
             }
             if (memory.outputResourceType && LogisticsManager.getResourceAmount(lab, memory.outputResourceType) > 0) {
-                this._createCollectionTask(lab, memory.outputResourceType, 65);
+                this._createCollectionTask(lab, memory.outputResourceType, PRIORITY.LAB_OUTPUT);
             }
         });
 
@@ -297,21 +327,21 @@ class LogisticsManager {
         containers.forEach(container => {
             Object.keys(container.store).forEach(resourceType => {
                 var amount = container.store.getUsedCapacity(resourceType);
-                if (amount >= 400 || container.store.getFreeCapacity(resourceType) === 0) {
-                    this._createCollectionTask(container, resourceType, 75);
+                if (amount >= config.CONTAINER_COLLECT_MIN || container.store.getFreeCapacity(resourceType) === 0) {
+                    this._createCollectionTask(container, resourceType, PRIORITY.CONTAINER);
                 }
             });
         });
 
         var droppedResources = MainCache.find(this._room, FIND_DROPPED_RESOURCES, {
-            filter: resource => resource.amount >= 100
+            filter: resource => resource.amount >= config.DROPPED_COLLECT_MIN
         });
-        droppedResources.forEach(resource => this._createCollectionTask(resource, resource.resourceType, 80));
+        droppedResources.forEach(resource => this._createCollectionTask(resource, resource.resourceType, PRIORITY.DROPPED));
 
         var salvage = MainCache.find(this._room, FIND_TOMBSTONES).concat(MainCache.find(this._room, FIND_RUINS));
         salvage.forEach(object => {
             Object.keys(object.store).forEach(resourceType => {
-                if (object.store.getUsedCapacity(resourceType) > 0) this._createCollectionTask(object, resourceType, 85);
+                if (object.store.getUsedCapacity(resourceType) > 0) this._createCollectionTask(object, resourceType, PRIORITY.SALVAGE);
             });
         });
 
@@ -329,11 +359,11 @@ class LogisticsManager {
             var memory = MainUtil.fetchMemoryOfStructure(factory);
             var inputs = Object.assign({}, memory.inputResources || {});
             if (memory.inputResourceType && inputs[memory.inputResourceType] === undefined) {
-                inputs[memory.inputResourceType] = memory.targetAmount || 1000;
+                inputs[memory.inputResourceType] = memory.targetAmount || config.LAB_INPUT_DEFAULT;
             }
             if (Array.isArray(memory.inputResourceTypes)) {
                 memory.inputResourceTypes.forEach(resourceType => {
-                    if (inputs[resourceType] === undefined) inputs[resourceType] = memory.targetAmount || 1000;
+                    if (inputs[resourceType] === undefined) inputs[resourceType] = memory.targetAmount || config.LAB_INPUT_DEFAULT;
                 });
             }
             Object.keys(inputs).sort().forEach(resourceType => {
@@ -350,7 +380,7 @@ class LogisticsManager {
                 Object.keys(memory.outputResources).forEach(resourceType => outputs.add(resourceType));
             }
             outputs.forEach(resourceType => {
-                if (factory.store.getUsedCapacity(resourceType) > 0) this._createCollectionTask(factory, resourceType, 60);
+                if (factory.store.getUsedCapacity(resourceType) > 0) this._createCollectionTask(factory, resourceType, PRIORITY.FACTORY);
             });
         });
     }
@@ -363,7 +393,7 @@ class LogisticsManager {
             amount = Math.min(amount, TerminalManager.getAvailable(this._room, RESOURCE_ENERGY));
         }
         if (amount <= 0) return null;
-        var task = this._createTask(source.id, factory.id, resourceType, amount, 60, KIND_SUPPLY);
+        var task = this._createTask(source.id, factory.id, resourceType, amount, PRIORITY.FACTORY, KIND_SUPPLY);
         if (task) task.factoryInput = true;
         return task;
     }
@@ -375,7 +405,7 @@ class LogisticsManager {
             var hubs = [this._room.storage, this._room.terminal].filter(hub => !!hub);
             var source = hubs.find(hub => hub.store.getUsedCapacity(resourceType) > rule.max);
             var target = hubs.find(hub => source && hub.id !== source.id && hub.store.getUsedCapacity(resourceType) < rule.min);
-            if (source && target) this._createTask(source.id, target.id, resourceType, source.store.getUsedCapacity(resourceType) - rule.max, 30, KIND_SUPPLY);
+            if (source && target) this._createTask(source.id, target.id, resourceType, source.store.getUsedCapacity(resourceType) - rule.max, PRIORITY.STOCK_POLICY, KIND_SUPPLY);
         });
     }
 
@@ -549,6 +579,85 @@ class LogisticsManager {
         });
     }
 
+    /*
+     * What the logistics queue has already promised this tick, so that creeps working on their
+     * own do not walk to the same extension or pile as a hauler that is on its way.
+     */
+
+    static getClaims(room) {
+        return MainCache.memo('claims:' + room.name, () => {
+            var claims = { targets: new Set(), pickups: new Set() };
+            var tasks = room.memory.logistics && Array.isArray(room.memory.logistics.tasks) ? room.memory.logistics.tasks : [];
+            tasks.forEach(task => {
+                if (!task.assignedCreep) return;
+                if (task.kind === KIND_COLLECT) claims.pickups.add(task.sourceId);
+                else claims.targets.add(task.targetId);
+            });
+            return claims;
+        });
+    }
+
+    /*
+     * Cargo on its way to a target, which is in neither the source's store nor the target's yet.
+     */
+
+    static getInboundAmount(room, targetId, resourceType) {
+        var tasks = room.memory.logistics && Array.isArray(room.memory.logistics.tasks) ? room.memory.logistics.tasks : [];
+        return tasks.reduce((amount, task) => {
+            if (task.targetId !== targetId || task.resourceType !== resourceType || !task.assignedCreep) return amount;
+            var creep = Game.creeps[task.assignedCreep];
+            return amount + (creep ? creep.store.getUsedCapacity(resourceType) : 0);
+        }, 0);
+    }
+
+    static isDeliveryClaimed(room, targetId) {
+        var tasks = room.memory.logistics && Array.isArray(room.memory.logistics.tasks) ? room.memory.logistics.tasks : [];
+        return tasks.some(task => task.targetId === targetId && !!task.assignedCreep && task.kind !== KIND_COLLECT);
+    }
+
+    /*
+     * A hauler loading for one extension at a time walks back for every 50 energy, and a room that
+     * spawns often never gets past refilling them to collect from its containers. So it loads for
+     * all the energy deliveries waiting and hands it out target by target. Lab and factory energy
+     * stay exact, because those amounts are what keeps them out of the emergency reserve.
+     * What other haulers already carry beyond their own task is on its way to those same targets.
+     */
+
+    static getPickupAmount(room, task) {
+        if (!this._canShareLoad(room, task)) return task.remaining;
+        var waiting = task.remaining;
+        var spareElsewhere = 0;
+        room.memory.logistics.tasks.forEach(other => {
+            if (other === task || !this._canShareLoad(room, other)) return;
+            if (other.assignedCreep) spareElsewhere += this._getSpareLoad(other);
+            else if (other.state === 'open' && other.retryAfter <= Game.time) waiting += other.remaining;
+        });
+        return Math.max(task.remaining, waiting - spareElsewhere);
+    }
+
+    // a withdrawal only shows in the creep's store next tick, so the claim covers the tick it happens
+    static _getSpareLoad(task) {
+        var creep = Game.creeps[task.assignedCreep];
+        var cargo = creep ? creep.store.getUsedCapacity(RESOURCE_ENERGY) || 0 : 0;
+        return Math.max(0, Math.max(cargo, task.claimedAmount || 0) - task.remaining);
+    }
+
+    static _canShareLoad(room, task) {
+        if (task.kind !== KIND_SUPPLY || task.resourceType !== RESOURCE_ENERGY || task.labInput || task.factoryInput) return false;
+        return !(room.storage && task.targetId === room.storage.id) && !(room.terminal && task.targetId === room.terminal.id);
+    }
+
+    /*
+     * Whether a hauler is here to serve the queue. Until there is one, creeps loot for themselves.
+     */
+
+    static hasWorkers(room) {
+        return MainCache.memo('workers:' + room.name, () => MainCache.getCreeps().some(creep => {
+            return !creep.spawning && creep.room.name === room.name &&
+                (creep.memory.role === 'Storekeeper' || creep.memory.role === 'Courier');
+        }));
+    }
+
     static getDesiredWorkerCount(room, roleName) {
         if (!room.memory.logistics || !Array.isArray(room.memory.logistics.tasks)) return 0;
         var options = roleName === 'Storekeeper' ? { resourceType: RESOURCE_ENERGY } : {};
@@ -556,7 +665,20 @@ class LogisticsManager {
             if (task.assignedCreep || task.remaining <= 0 || task.state !== 'open' || task.retryAfter > Game.time) return false;
             return !options.resourceType || task.resourceType === options.resourceType;
         }).length;
-        return available > 0 ? Math.min(available, roleName === 'Storekeeper' ? 2 : 1) : 0;
+        if (available <= 0) return 0;
+        if (roleName !== 'Storekeeper') return 1;
+        // measured hauling need sets the fleet size; without it, match the work that is open
+        if (EconomyManager.getHaulingCarryParts(room) > 0) {
+            return EconomyManager.getDesiredStorekeepers(room, this._getStorekeeperCarryParts(room));
+        }
+        return Math.min(available, economy.WORKERS_FALLBACK);
+    }
+
+    static _getStorekeeperCarryParts(room) {
+        var roleConfig = room.memory.base && room.memory.base.roleConfig || {};
+        var pairCost = BODYPART_COST[MOVE] + BODYPART_COST[CARRY];
+        var wanted = roleConfig.partsMaxMultiplier || EconomyManager.getStorekeeperCarryParts(room);
+        return Math.max(1, Math.min(wanted, Math.floor(room.energyCapacityAvailable / pairCost)));
     }
 
     static assignTask(creep, options = {}) {
@@ -573,20 +695,23 @@ class LogisticsManager {
             if (task.assignedCreep || task.remaining <= 0 || task.state !== 'open' || task.retryAfter > Game.time) return false;
             return !options.resourceType || task.resourceType === options.resourceType;
         });
+        // a hauler already carrying the resource goes straight to the target, so that is the walk that counts
+        var getDistance = task => {
+            var isCarrying = (creep.store.getUsedCapacity(task.resourceType) || 0) > 0;
+            var object = Game.getObjectById(isCarrying ? task.targetId : task.sourceId);
+            return object ? creep.pos.getRangeTo(object) : 50;
+        };
         availableTasks.sort((a, b) => {
             var priorityDifference = b.priority - a.priority;
             if (priorityDifference) return priorityDifference;
-            var sourceA = Game.getObjectById(a.sourceId);
-            var sourceB = Game.getObjectById(b.sourceId);
-            var distanceA = sourceA ? creep.pos.getRangeTo(sourceA) : 50;
-            var distanceB = sourceB ? creep.pos.getRangeTo(sourceB) : 50;
-            return distanceA - distanceB || a.created - b.created || a.id.localeCompare(b.id);
+            return getDistance(a) - getDistance(b) || a.created - b.created || a.id.localeCompare(b.id);
         });
         if (availableTasks.length === 0) return null;
 
         var selectedTask = availableTasks[0];
         selectedTask.assignedCreep = creep.name;
         selectedTask.claimedAmount = 0;
+        selectedTask.lastProgress = Game.time;
         var currentCargo = creep.store.getUsedCapacity(selectedTask.resourceType) || 0;
         creep.memory.taskId = selectedTask.id;
         creep.memory.logistics = {

@@ -39,13 +39,13 @@ class FactoryManager {
         };
         var config = Object.assign(defaults, room.memory.factory || {});
         config.enabled = config.enabled !== false;
-        config.batteryTarget = this._clamp(config.batteryTarget, 0, 1000000, 0);
-        config.batchSize = this._clamp(config.batchSize, 1, 100000, 1000);
-        config.maxDepth = this._clamp(config.maxDepth, 0, 8, 4);
-        config.maxGoals = this._clamp(config.maxGoals, 1, 16, 4);
-        config.planningInterval = this._clamp(config.planningInterval, 1, 1000, 10);
-        config.requestExpiry = this._clamp(config.requestExpiry, 1, 10000, 1000);
-        config.priority = this._clamp(config.priority, 0, 1000, 70);
+        config.batteryTarget = MainUtil.clamp(config.batteryTarget, 0, 1000000, 0);
+        config.batchSize = MainUtil.clamp(config.batchSize, 1, 100000, 1000);
+        config.maxDepth = MainUtil.clamp(config.maxDepth, 0, 8, 4);
+        config.maxGoals = MainUtil.clamp(config.maxGoals, 1, 16, 4);
+        config.planningInterval = MainUtil.clamp(config.planningInterval, 1, 1000, 10);
+        config.requestExpiry = MainUtil.clamp(config.requestExpiry, 1, 10000, 1000);
+        config.priority = MainUtil.clamp(config.priority, 0, 1000, 70);
         config.goals = config.goals || config.targetStock || {};
         room.memory.factory = config;
         return config;
@@ -59,13 +59,13 @@ class FactoryManager {
                 if (!entry) return;
                 var resourceType = entry.resourceType || entry.commodity || entry.resource;
                 var target = entry.target === undefined ? entry.amount : entry.target;
-                if (resourceType) goals[resourceType] = FactoryManager._clamp(target, 0, 1000000, 0);
+                if (resourceType) goals[resourceType] = MainUtil.clamp(target, 0, 1000000, 0);
             });
         } else if (configured && typeof configured === 'object') {
             Object.keys(configured).slice(0, FactoryManager.MAX_CONFIGURED_GOALS).forEach(resourceType => {
                 var value = configured[resourceType];
                 var target = value && typeof value === 'object' ? (value.target === undefined ? value.amount : value.target) : value;
-                goals[resourceType] = FactoryManager._clamp(target, 0, 1000000, 0);
+                goals[resourceType] = MainUtil.clamp(target, 0, 1000000, 0);
             });
         }
         if (this._config.batteryTarget > 0 && goals[RESOURCE_BATTERY] === undefined) {
@@ -175,7 +175,7 @@ class FactoryManager {
             invalid: [],
         };
         var available = this._getStockMap(room);
-        var maxDepth = this._clamp(options.maxDepth, 0, 8, 4);
+        var maxDepth = MainUtil.clamp(options.maxDepth, 0, 8, 4);
         var visit = (resource, requiredAmount, depth, path) => {
             var recipe = this.getRecipe(resource);
             if (!recipe) {
@@ -438,13 +438,6 @@ class FactoryManager {
         return stocks;
     }
 
-    static _clamp(value, minimum, maximum, fallback) {
-        value = Number(value);
-        if (value === Infinity) return maximum;
-        if (value === -Infinity) return minimum;
-        if (!Number.isFinite(value)) return fallback;
-        return Math.max(minimum, Math.min(maximum, value));
-    }
 }
 
 FactoryManager.MAX_DEPENDENCY_STEPS = 32;

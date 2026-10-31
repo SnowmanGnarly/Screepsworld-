@@ -4,13 +4,21 @@
 
 var MainUtil = require('./main.util');
 var MainCache = require('./main.cache');
+var info = require('./main.info');
 var TileWatcher = require('./tile.watcher');
 var TileArray = require('./tile.array');
 
 class RoadManager extends TileWatcher {
 
 	static watchAllRooms() {
-	    MainUtil.findAllRooms().forEach(room => new RoadManager(room).watchRoom());
+	    MainUtil.findAllRooms().forEach(room => {
+	    	try {
+	    		new RoadManager(room).watchRoom();
+	    	} catch (error) {
+	    		info.error('Could not watch roads for ' + room.name + ': ' + error, room);
+	    		console.log(error.stack);
+	    	}
+	    });
 	}
 	
 	constructor(room) {
@@ -45,7 +53,7 @@ class RoadManager extends TileWatcher {
 
 	_watchRoomTiles(tiles) {
 		MainCache.find(this._room, FIND_MY_CREEPS).filter(creep => !creep.spawning).forEach(creep => {
-			if (creep.memory.moving) {
+			if (creep.movedThisTick) {
 				var key = creep.pos.x + ',' + creep.pos.y;
 				tiles[key] = (tiles[key] || 0) + 1;
 			}
