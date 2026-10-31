@@ -292,13 +292,15 @@ class LogisticsManager {
         });
         labs.forEach(lab => {
             var memory = MainUtil.fetchMemoryOfStructure(lab);
+            // a required spawn is waiting on this lab, for its compound and its energy alike
+            var boosting = memory.labRole === 'boost';
             var energyFree = lab.store.getFreeCapacity(RESOURCE_ENERGY);
-            if (energyFree >= config.LAB_REFILL_FREE) this._createLabSupplyTask(lab, RESOURCE_ENERGY, PRIORITY.LAB_ENERGY, energyFree);
+            if (energyFree >= config.LAB_REFILL_FREE) this._createLabSupplyTask(lab, RESOURCE_ENERGY, boosting ? PRIORITY.LAB_BOOST : PRIORITY.LAB_ENERGY, energyFree);
             var inputResource = memory.inputResourceType || memory.resourceType;
             var targetAmount = memory.targetAmount === undefined ? config.LAB_INPUT_DEFAULT : Math.max(0, Number(memory.targetAmount) || 0);
             var inputMissing = inputResource ? targetAmount - lab.store.getUsedCapacity(inputResource) : 0;
             if (inputResource && inputMissing > 0 && (!lab.mineralType || lab.mineralType === inputResource)) {
-                this._createLabSupplyTask(lab, inputResource, PRIORITY.LAB_INPUT, inputMissing);
+                this._createLabSupplyTask(lab, inputResource, boosting ? PRIORITY.LAB_BOOST : PRIORITY.LAB_INPUT, inputMissing);
             }
             if (memory.outputResourceType && LogisticsManager.getResourceAmount(lab, memory.outputResourceType) > 0) {
                 this._createCollectionTask(lab, memory.outputResourceType, PRIORITY.LAB_OUTPUT);
@@ -590,6 +592,24 @@ class LogisticsManager {
             return !creep.spawning && creep.room.name === room.name &&
                 (creep.memory.role === 'Storekeeper' || creep.memory.role === 'Courier');
         }));
+    }
+
+    /*
+     * Cargo on its way to a target, which is in neither the source's store nor the target's yet.
+     */
+
+    static getInboundAmount(room, targetId, resourceType) {
+        var tasks = room.memory.logistics && Array.isArray(room.memory.logistics.tasks) ? room.memory.logistics.tasks : [];
+        return tasks.reduce((amount, task) => {
+            if (task.targetId !== targetId || task.resourceType !== resourceType || !task.assignedCreep) return amount;
+            var creep = Game.creeps[task.assignedCreep];
+            return amount + (creep ? creep.store.getUsedCapacity(resourceType) : 0);
+        }, 0);
+    }
+
+    static isDeliveryClaimed(room, targetId) {
+        var tasks = room.memory.logistics && Array.isArray(room.memory.logistics.tasks) ? room.memory.logistics.tasks : [];
+        return tasks.some(task => task.targetId === targetId && !!task.assignedCreep && task.kind !== KIND_COLLECT);
     }
 
     static getDesiredWorkerCount(room, roleName) {

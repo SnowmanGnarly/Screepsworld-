@@ -2,6 +2,7 @@ var MainCache = require('./main.cache');
 var MainHeap = require('./main.heap');
 var MainUtil = require('./main.util');
 var TerminalManager = require('./manager.terminal');
+var LogisticsManager = require('./manager.logistics');
 var MarketManager = require('./manager.market');
 var CpuManager = require('./manager.cpu');
 var LabMatrix = require('./lab.matrix');
@@ -51,6 +52,7 @@ class LabManager {
             activeGoal: null,
             boostRequests: {},
             boosts: {},
+            preloads: {},
             nextPlanningAt: 0,
             produceRetryAfter: 0,
         };
@@ -71,6 +73,7 @@ class LabManager {
         memory.assignments.outputs = Array.isArray(memory.assignments.outputs) ? memory.assignments.outputs : [];
         memory.boostRequests = memory.boostRequests && typeof memory.boostRequests === 'object' ? memory.boostRequests : {};
         memory.boosts = memory.boosts && typeof memory.boosts === 'object' ? memory.boosts : {};
+        memory.preloads = memory.preloads && typeof memory.preloads === 'object' ? memory.preloads : {};
         room.memory.lab = memory;
         return memory;
     }
@@ -106,6 +109,7 @@ class LabManager {
             return;
         }
 
+        this._cleanPreloads();
         this._topology = this._getTopology();
         var goal = this._advance();
 
@@ -487,13 +491,27 @@ class LabManager {
     _projectLabMetadata(step) {
         var reservations = this._collectBoostReservations();
         var topology = this._topology;
+        var preloadedLabs = this._getPreloadedLabs();
         this._labs.forEach(lab => {
             var memory = MainUtil.fetchMemoryOfStructure(lab);
-            var reserved = reservations[lab.id] || { amount: 0, energy: 0 };
-            memory.reservedBoostAmount = lab.mineralType ? reserved.resources && reserved.resources[lab.mineralType] || 0 : 0;
+            var reserved = reservations[lab.id] || { amount: 0, energy: 0, resources: {} };
+            var preload = preloadedLabs[lab.id];
+            var held = preload && lab.mineralType === preload.resourceType ? preload.amount : 0;
+            memory.reservedBoostAmount = lab.mineralType ? (reserved.resources[lab.mineralType] || 0) + held : 0;
             memory.reservedBoostEnergy = reserved.energy || 0;
             var inTopology = topology && (topology.inputA.id === lab.id || topology.inputB.id === lab.id ||
                 topology.outputs.some(output => output.id === lab.id));
+            if (preload) {
+                // logistics loads this like any lab input, once a lab holding something else has drained
+                var foreign = lab.mineralType && lab.mineralType !== preload.resourceType;
+                memory.labManaged = true;
+                memory.labRole = 'boost';
+                memory.inputResourceType = preload.resourceType;
+                memory.targetAmount = Math.min(LabManager.MINERAL_CAPACITY, preload.amount + (reserved.resources[preload.resourceType] || 0));
+                memory.outputResourceType = foreign ? lab.mineralType : null;
+                memory.activeReaction = null;
+                return;
+            }
             if (reserved.amount > 0) {
                 memory.labRole = 'boost';
                 // Manual stock settings belong to the player and must survive the boost.
@@ -514,7 +532,8 @@ class LabManager {
                 memory.targetAmount = 0;
                 memory.outputResourceType = lab.mineralType;
                 memory.activeReaction = null;
-                if (!lab.mineralType) memory.labManaged = false;
+                // a delivery still on its way must find a lab that will drain it, not one left to the player
+                if (!lab.mineralType && !LogisticsManager.isDeliveryClaimed(this._room, lab.id)) memory.labManaged = false;
                 return;
             }
 
@@ -720,7 +739,8 @@ class LabManager {
         var reservations = LabManager._collectBoostReservations(room);
         var usedEnergy = {};
         var steps = [];
-        var complete = Object.keys(counts).sort().every(resourceType => {
+        var missing = {};
+        Object.keys(counts).sort().forEach(resourceType => {
             var remaining = counts[resourceType];
             labs.forEach(lab => {
                 if (remaining <= 0 || lab.mineralType !== resourceType) return;
@@ -733,10 +753,13 @@ class LabManager {
                 usedEnergy[lab.id] = (usedEnergy[lab.id] || 0) + count * LabManager.BOOST_ENERGY;
                 remaining -= count;
             });
-            return remaining <= 0;
+            if (remaining > 0) missing[resourceType] = true;
         });
+        var complete = Object.keys(missing).length === 0;
+        if (required) LabManager._queuePreloads(room, config, labs, reservations, counts, missing);
         Object.keys(counts).forEach(resourceType => {
-            LabMatrix.noteBoostDemand(room.name, resourceType, counts[resourceType], !complete);
+            // what is already being loaded has no need to wake reaction planning
+            LabMatrix.noteBoostDemand(room.name, resourceType, counts[resourceType], !complete && !config.preloads[resourceType]);
         });
         if (!complete) return { allow: !required, plan: null };
         return {
@@ -745,10 +768,90 @@ class LabManager {
         };
     }
 
+    /*
+     * The spawn attempt that finds a required compound in the hub rather than in a lab is what
+     * starts it moving. The spawn stays blocked until the lab is stocked, so a late hauler costs
+     * a short wait and not a creep's lifetime. A body is queued whole or not at all, because
+     * parking one compound in a lab does nothing while another cannot be supplied.
+     *
+     * Entries belong to the compound and not to the role, since another role may be relying on the
+     * same one. So a body that cannot be queued leaves them be: they go when the stock can no
+     * longer cover what they hold out for, or when nobody that can be served is refreshing them.
+     */
+
+    static _queuePreloads(room, config, labs, reservations, counts, missing) {
+        var entries = {};
+        var taken = {};
+        Object.keys(config.preloads).forEach(resourceType => {
+            taken[config.preloads[resourceType].labId] = true;
+        });
+        var coverable = true;
+        Object.keys(counts).sort().forEach(resourceType => {
+            var current = config.preloads[resourceType];
+            if (!current && !missing[resourceType]) return;
+            var amount = counts[resourceType] * LabManager.BOOST_MINERAL;
+            var lab = current ? labs.find(candidate => candidate.id === current.labId) :
+                LabManager._designatePreloadLab(room, config, labs, reservations, resourceType, amount, taken);
+            var supply = lab ? LabManager._getPreloadSupply(room, lab, reservations, resourceType) : 0;
+            if (current && supply < current.amount) {
+                delete config.preloads[resourceType];
+                current = null;
+            }
+            if (!lab || supply < amount) {
+                coverable = false;
+                return;
+            }
+            taken[lab.id] = true;
+            entries[resourceType] = { labId: lab.id, amount: current ? Math.max(current.amount, amount) : amount, askedAt: Game.time };
+        });
+        if (coverable) Object.assign(config.preloads, entries);
+    }
+
+    // What a lab can end up holding for a new spawn. Cargo in a hauler is in neither store, but it is still coming.
+    static _getPreloadSupply(room, lab, reservations, resourceType) {
+        var held = lab.mineralType === resourceType ? lab.store.getUsedCapacity(resourceType) : 0;
+        var reserved = reservations[lab.id] ? reservations[lab.id].resources[resourceType] || 0 : 0;
+        return held - reserved + LogisticsManager.getInboundAmount(room, lab.id, resourceType) + TerminalManager.getAvailable(room, resourceType);
+    }
+
+    // Input labs stay out because a reaction cannot run without them. Output labs just wait their turn.
+    static _designatePreloadLab(room, config, labs, reservations, resourceType, amount, taken) {
+        var hub = room.storage || room.terminal;
+        var rank = lab => lab.mineralType === resourceType ? 0 : lab.mineralType ? 2 : 1;
+        return labs.filter(lab => {
+            if (taken[lab.id] || lab.id === config.assignments.inputA || lab.id === config.assignments.inputB) return false;
+            if (LabManager._isStockLab(MainUtil.fetchMemoryOfStructure(lab))) return false;
+            var reserved = reservations[lab.id] ? reservations[lab.id].resources : {};
+            if (Object.keys(reserved).some(other => other !== resourceType)) return false;
+            return LabManager.MINERAL_CAPACITY - (reserved[resourceType] || 0) >= amount;
+        }).sort((a, b) => {
+            return rank(a) - rank(b) || (hub ? a.pos.getRangeTo(hub) - b.pos.getRangeTo(hub) : 0) || a.id.localeCompare(b.id);
+        })[0] || null;
+    }
+
+    _getPreloadedLabs() {
+        var byLab = {};
+        Object.keys(this._memory.preloads).forEach(resourceType => {
+            var entry = this._memory.preloads[resourceType];
+            byLab[entry.labId] = { resourceType, amount: entry.amount };
+        });
+        return byLab;
+    }
+
+    // Every spawn attempt refreshes its entries, so one that has gone quiet no longer needs the lab.
+    _cleanPreloads() {
+        Object.keys(this._memory.preloads).forEach(resourceType => {
+            var entry = this._memory.preloads[resourceType];
+            var exists = this._labs.some(lab => lab.id === entry.labId);
+            if (!exists || Game.time - entry.askedAt > config.PRELOAD_TTL) delete this._memory.preloads[resourceType];
+        });
+    }
+
     static registerSpawnBoost(creep, plan) {
         if (!creep || !plan || !plan.steps || plan.steps.length === 0) return;
         var room = Game.rooms[plan.roomName] || creep.room;
         var config = LabManager.getConfig(room);
+        plan.steps.forEach(step => delete config.preloads[step.resourceType]);
         config.boostRequests[creep.name] = {
             creepName: creep.name,
             roleName: plan.roleName,
@@ -819,11 +922,13 @@ class LabManager {
             if (creep) delete creep.memory.labBoost;
         });
         this._memory.boostRequests = {};
+        this._memory.preloads = {};
     }
 
     _isLabReserved(labId) {
         var reservations = this._collectBoostReservations();
-        return !!(reservations[labId] && reservations[labId].amount > 0);
+        if (reservations[labId] && reservations[labId].amount > 0) return true;
+        return Object.keys(this._memory.preloads).some(resourceType => this._memory.preloads[resourceType].labId === labId);
     }
 
     _collectBoostReservations() {

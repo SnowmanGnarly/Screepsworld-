@@ -73,7 +73,7 @@ module.exports = {
 	LOGISTICS: {
 		PRIORITY: {
 			CORE: 100, TOWER_UNDER_ATTACK: 95, SALVAGE: 85, DROPPED: 80, LEGACY_ROUTE: 80, CONTAINER: 75,
-			HUB_LINK: 70, LAB_OUTPUT: 65, LAB_ENERGY: 65, TOWER: 60, LAB_INPUT: 60,
+			LAB_BOOST: 72, HUB_LINK: 70, LAB_OUTPUT: 65, LAB_ENERGY: 65, TOWER: 60, LAB_INPUT: 60,
 		},
 		TOWER_REFILL_FREE: 200, // tower capacity free before a refill is requested
 		LAB_REFILL_FREE: 400,
@@ -98,6 +98,7 @@ module.exports = {
 		BOOST_SPAWNS_AHEAD: 2, // spawns of the largest seen body to keep stocked per compound
 		PRICE_TTL: 5000, // ticks between reads of market history
 		MIN_PROFIT_RATE: 1, // credits per reaction cooldown tick below which profit goals are ignored
+		PRELOAD_TTL: 500, // ticks without a spawn attempt before a pre-loaded lab is released; a role may be saving energy
 	},
 
 	MEMORY: {

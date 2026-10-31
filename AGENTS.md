@@ -96,7 +96,8 @@ Although most files have `checkJs` disabled globally, `logistics.runner.js` opts
 | `manager.remote.js` | Plans explicit remote missions, bounded route demand and ROI, exact spawn requests, suspension/blacklist metadata, and remote sites. |
 | `manager.factory.js` | Plans bounded goal-driven factory chains, recursive component imports, battery compression, cancellation, local logistics, and energy-reserve protection. |
 | `manager.mineral.js` | Checks RCL 6+ mineral/extractor readiness, regeneration, cooldown, and storage/terminal capacity for automatic capped mining demand. |
-| `manager.lab.js` | Dynamically assigns source/output labs, plans bounded reaction chains and terminal imports, and coordinates opt-in spawn boost reservations and post-spawn boosting. |
+| `manager.lab.js` | Dynamically assigns source/output labs, runs the idle/select/acquire/react goal lifecycle, plans bounded reaction chains and terminal imports, and coordinates opt-in spawn boost reservations, pre-loading, and post-spawn boosting. |
+| `lab.matrix.js` | Ranks what a room's labs should make next: boost demand seen at the spawn preflight, manual goals, then opt-in market profit. Reads and ranks only; `manager.lab.js` issues every order. |
 | `manager.logistics.js` | Persistent per-room task queue, request generation, endpoint refresh, claims, partial-delivery reconciliation, exact lab transport, boost-reserve protection, and dynamic hauler demand. |
 | `manager.terminal.js` | Bounded cross-room resource requests, owned-room balancing, reserve/fee accounting, cooldown-safe sends, and terminal stock positioning. |
 | `manager.market.js` | Explicitly enabled existing-order buying/selling with price/credit/fee limits, deal caps, failure backoff, and bounded history. |
@@ -132,7 +133,7 @@ All ordinary roles extend `role.prototype.js` and are registered in `BaseManager
 | `role.remoteMiner.js` | Mines an assigned outpost source, builds nearby sites, and delivers or drops energy. |
 | `role.remoteHauler.js` | Carries remote energy to home storage/terminal and recovers foreign cargo. |
 
-`RolePrototype` supplies target/source selection, commuting, persisted-coordinate room travel, nearby looting for rooms without haulers, manual move/recycle overrides, error handling, exact mission bodies, body generation, and shared spawn-time boost preflight. Body generation respects available energy, role multipliers, and the 50-part creep limit. Boost policies are opt-in; required policies wait for a fully stocked lab plan, optional policies spawn unboosted, and emergency Harvester recovery bypasses boost requirements. Roles commonly override `isNecessary()`, `spawnCreep()`, `_findTargets()`, `_findSources()`, and `_work()`.
+`RolePrototype` supplies target/source selection, commuting, persisted-coordinate room travel, nearby looting for rooms without haulers, manual move/recycle overrides, error handling, exact mission bodies, body generation, and shared spawn-time boost preflight. Body generation respects available energy, role multipliers, and the 50-part creep limit. Boost policies are opt-in; required policies wait for a fully stocked lab plan and pre-load it from the hub through the logistics queue, optional policies spawn unboosted, and emergency Harvester recovery bypasses boost requirements. Roles commonly override `isNecessary()`, `spawnCreep()`, `_findTargets()`, `_findSources()`, and `_work()`.
 
 Role instances are created once per global reset and shared across creeps and ticks. Do not add per-creep or per-tick state to role instance fields beyond what `run()` resets; durable state belongs in Screeps `Memory`.
 
@@ -196,6 +197,8 @@ Tests are local Mocha tests using Node assertions; they do not connect to a Scre
 - `test/mineral.regression.test.js`: extractor/mineral readiness, automatic spawning, harvesting, capacity, and delivery.
 - `test/lab.regression.test.js`: dynamic lab topology, recursive reactions, imports, cooldowns, exact logistics, reassignment, and reserves.
 - `test/boost.regression.test.js`: boost preflight, resource costs, reservations, multi-lab movement, cleanup, emergency bypass, and outsourced spawning.
+- `test/matrix.regression.test.js`: the goal lifecycle, stall backoff, boost demand, batch shrinking, profit ranking, and the per-tick cost of the topology search and metadata writes.
+- `test/preload.regression.test.js`: the pre-load queue, lab designation, hauler tasks, the spawn unblock, release, and the whole path with a real Courier.
 - `test/hardening.regression.test.js`: healing estimates, recovery reserve, layout top-up, job isolation and tiers, CPU history, heap and Memory rules, movement, work claims, and the base planner.
 - `test/demand.regression.test.js`: derived demand, the spawn queue, energy reservation, pre-spawn, and a new room reaching RCL 4 with no console commands.
 - `test/lifetime.regression.test.js`: runs a growing room with every game object rebuilt between ticks, so anything kept across ticks throws.

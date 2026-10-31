@@ -106,7 +106,9 @@
   - [x] Implement bounded ordered base/T1/T2/T3 reaction chains driven by storage/terminal/lab inventory and strategic reserves.
   - [x] Integrate with `manager.logistics.js` for exact energy/reagent loading, product collection, and drain-before-reassignment.
 - [x] Implement opt-in boost requests with stocked-lab preflight, resource reservations, post-spawn boosting, cleanup, and emergency recovery bypass.
-- [x] Cover mineral harvesting in `test/mineral.regression.test.js`, reactions/logistics in `test/lab.regression.test.js`, and boosts in `test/boost.regression.test.js`.
+- [x] Rank goals from spawn-time boost demand, manual goals, and opt-in market profit (`lab.matrix.js`), with per-resource backoff for goals that stall.
+- [x] Pre-load compounds for `required` boost policies from storage or terminal before the creep spawns.
+- [x] Cover mineral harvesting in `test/mineral.regression.test.js`, reactions/logistics in `test/lab.regression.test.js`, boosts in `test/boost.regression.test.js`, ranking in `test/matrix.regression.test.js`, and pre-loading in `test/preload.regression.test.js`.
 
 ---
 
