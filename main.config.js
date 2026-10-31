@@ -11,7 +11,7 @@ const SETTING_DEFAULTS = {
 };
 
 module.exports = {
-	VERSION: '1.10.0', // keep in step with package.json; version() shows what the shard is running
+	VERSION: '1.11.0', // keep in step with package.json; version() shows what the shard is running
 
 	ROLE_PRIORITY: { // spawn order, the higher the sooner. Local roles all come before mission creeps
 		Harvester: 100, Defender: 90, Miner: 85, Storekeeper: 75, Builder: 70, Upgrader: 50, Courier: 40,
@@ -46,8 +46,10 @@ module.exports = {
 		PATH_FACTOR: 1.3, // straight-line range to estimated path length, when no path can be measured
 		ROUTE_TTL: 5000, // ticks before a measured route length is measured again
 		UPGRADER_MAX: 5, // upper bound on derived Upgraders per room
-		UPGRADER_STORAGE_FLOOR: 30000, // stored energy kept for emergencies before upgrading at full rate
-		UPGRADER_STORAGE_STEP: 100000, // stored energy above the floor that pays for one more Upgrader
+		ENERGY_RESERVE_MINIMUM: 50000, // storage plus terminal energy that workers, labs and factories never spend; room.memory.terminal.emergencyReserve overrides it
+		ENERGY_RESERVE_BY_RCL: { 4: 5000, 5: 20000 }, // a lower line while a room is still growing: the full one would stop it building for thousands of ticks, its first tower included
+		CONTROLLER_DOWNGRADE_GUARD: 5000, // ticks to downgrade below which an Upgrader may draw on the reserve
+		UPGRADER_STORAGE_STEP: 100000, // stored energy above the reserve that pays for one more Upgrader
 		UPGRADER_CONTAINER_FLOOR: 1000, // energy in containers before adding Upgraders, while there is no storage
 		UPGRADE_INCOME_SHARE: 0.6, // share of mined income spent on the controller; the rest pays for creeps
 		BUILDER_MAX: 3, // upper bound on derived Builders per room

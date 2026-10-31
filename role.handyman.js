@@ -4,6 +4,7 @@
  
 var config = require('./main.config');
 var MainCache = require('./main.cache');
+var EconomyManager = require('./manager.economy');
 var RolePrototype = require('./role.prototype');
  
 class Handyman extends RolePrototype {
@@ -18,6 +19,8 @@ class Handyman extends RolePrototype {
 	 */
 
 	getDemand(room) {
+		// one spawned now could only stand idle, and would cost the reserve its body
+		if (EconomyManager.isReserveLocked(room)) return 0;
 		var wallTargetHits = this._getWallTargetHits(room);
 		var needsRepair = MainCache.find(room, FIND_STRUCTURES).some(structure => {
 			if (structure.structureType == STRUCTURE_WALL || structure.structureType == STRUCTURE_RAMPART) return structure.hits < wallTargetHits;

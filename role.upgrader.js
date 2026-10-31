@@ -36,18 +36,22 @@ class Upgrader extends RolePrototype {
     }
 
     _findSources(room) {
-        var storedEnergy = this._useStorageAsSource ? MainCache.find(room, FIND_STRUCTURES, {
+        var storedEnergy = this._useStorageAsSource ? this._withoutReservedEnergy(room, MainCache.find(room, FIND_STRUCTURES, {
             filter: structure => {
                 return (structure.structureType == STRUCTURE_STORAGE ||
                     structure.structureType == STRUCTURE_CONTAINER ||
                     (structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == constants.LINK_TYPE_TARGET)) &&
                     structure.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
             }
-        }) : [];
+        })) : [];
         if (storedEnergy.length > 0 || !this._useSourceAsSource) {
             return EconomyManager.withoutSourceContainers(room, storedEnergy);
         }
         return this._findActiveSources(room);
+    }
+
+    _mayDrawReserve(room) {
+        return EconomyManager.isControllerAtRisk(room);
     }
 
     _findTargets(room) {

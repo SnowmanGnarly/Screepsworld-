@@ -1,5 +1,6 @@
 var MainUtil = require('./main.util');
 var IntelManager = require('./manager.intel');
+var EconomyManager = require('./manager.economy');
 var info = require('./main.info');
 
 class TerminalManager {
@@ -157,7 +158,6 @@ class TerminalManager {
     static getConfig(room) {
         var defaults = {
             enabled: true,
-            emergencyReserve: 50000,
             batchSize: 5000,
             cooldown: TERMINAL_COOLDOWN,
             hysteresis: 500,
@@ -172,7 +172,11 @@ class TerminalManager {
         var existing = room.memory.terminal || {};
         var memory = Object.assign(defaults, existing);
         memory.enabled = memory.enabled !== false;
-        memory.emergencyReserve = MainUtil.clamp(memory.emergencyReserve, 0, 10000000, 50000);
+        // rooms used to save the default here, where it would outlive a change to the config
+        if (memory.emergencyReserve === EconomyManager.LEGACY_DEFAULT_RESERVE) delete memory.emergencyReserve;
+        if (memory.emergencyReserve !== undefined) {
+            memory.emergencyReserve = MainUtil.clamp(memory.emergencyReserve, 0, 10000000, EconomyManager.getEnergyReserve(room));
+        }
         memory.batchSize = MainUtil.clamp(memory.batchSize, 1, 100000, 5000);
         memory.cooldown = MainUtil.clamp(memory.cooldown, 0, 100, TERMINAL_COOLDOWN);
         memory.hysteresis = MainUtil.clamp(memory.hysteresis, 0, memory.batchSize, Math.min(500, memory.batchSize));
@@ -455,7 +459,7 @@ class TerminalManager {
         var config = this.getConfig(room);
         var rule = config.resources[resourceType] || {};
         var reserve = MainUtil.clamp(rule.reserve, 0, 10000000, 0);
-        return resourceType === RESOURCE_ENERGY ? Math.max(reserve, config.emergencyReserve) : reserve;
+        return resourceType === RESOURCE_ENERGY ? Math.max(reserve, EconomyManager.getEnergyReserve(room)) : reserve;
     }
 
     static getAvailable(room, resourceType, exceptRequestId) {

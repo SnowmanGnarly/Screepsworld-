@@ -129,6 +129,67 @@ class EconomyManager {
 		return hasEnough ? elsewhere : stores;
 	}
 
+	/*
+	 * The one definition of how much energy a room may spend on anything that can wait. Hauling to
+	 * the spawn, extensions and towers is life-support and is not limited by this.
+	 */
+
+	static getStoredEnergy(room) {
+		return [room.storage, room.terminal].reduce((sum, store) => sum + (store ? store.store.getUsedCapacity(RESOURCE_ENERGY) : 0), 0);
+	}
+
+	static getEnergyReserve(room) {
+		var override = room.memory.terminal && room.memory.terminal.emergencyReserve;
+		if (Number.isFinite(override) && override >= 0 && override !== EconomyManager.LEGACY_DEFAULT_RESERVE) return override;
+		var growing = room.controller && config.ENERGY_RESERVE_BY_RCL[room.controller.level];
+		return growing === undefined || growing === null ? config.ENERGY_RESERVE_MINIMUM : growing;
+	}
+
+	static getSpendableEnergy(room) {
+		return Math.max(0, this.getStoredEnergy(room) - this.getEnergyReserve(room) - this._getWorkerDraw(room).amount);
+	}
+
+	// a withdrawal only shows in the store next tick, so this tick's are counted here
+	static noteWorkerWithdrawal(room, amount) {
+		this._getWorkerDraw(room).amount += amount;
+	}
+
+	static _getWorkerDraw(room) {
+		return MainCache.memo('workerDraw:' + room.name, () => ({ amount: 0 }));
+	}
+
+	// a room with no storage or terminal has no savings to protect, and spends what it mines
+	static isReserveLocked(room) {
+		return Boolean(room.storage || room.terminal) && this.getSpendableEnergy(room) <= 0;
+	}
+
+	static isReserveStore(room, store) {
+		return Boolean(store) && ((room.storage && store.id === room.storage.id) || (room.terminal && store.id === room.terminal.id));
+	}
+
+	/*
+	 * What workers leave alone while the reserve is locked: the reserve itself, and the income on its
+	 * way there through a source container or the hub link. Taking that instead would keep the
+	 * reserve from ever refilling, since the spawn keeps drawing on it.
+	 */
+
+	static isGuardedStore(room, store) {
+		if (this.isReserveStore(room, store) || this.isSourceContainer(room, store)) return true;
+		var hubLink = this.getHubLink(room);
+		return Boolean(hubLink) && store.id === hubLink.id;
+	}
+
+	static isControllerAtRisk(room) {
+		var controller = room.controller;
+		return Boolean(controller && controller.my && controller.ticksToDowngrade < config.CONTROLLER_DOWNGRADE_GUARD);
+	}
+
+	// without a spawn the room can replace nothing, which is what the reserve is for
+	static isRebuildingOnlySpawn(room) {
+		return MainCache.find(room, FIND_MY_SPAWNS).length === 0 &&
+			MainCache.find(room, FIND_MY_CONSTRUCTION_SITES).some(site => site.structureType === STRUCTURE_SPAWN);
+	}
+
 	static getMinableSources(room) {
 		return MainCache.memo('minable:' + room.name, () => {
 			return MainCache.find(room, FIND_SOURCES).filter(source => this.hasDropoff(room, source));
@@ -293,7 +354,7 @@ class EconomyManager {
 		var controller = room.controller;
 		if (!controller || !controller.my) return 0;
 		var reserve = this._getSpareEnergy(room);
-		if (!this.isSelfSustaining(room) || reserve < 0) return 1;
+		if (!this.isSelfSustaining(room) || reserve < 0 || this.isReserveLocked(room)) return 1;
 
 		var workPerCreep = Math.max(1, Math.min(this.getSpendingWorkParts(room), Math.floor(room.energyCapacityAvailable / this._getWorkerUnitCost())));
 		if (controller.level >= PLANNER.MAX_RCL) return Math.ceil(CONTROLLER_MAX_UPGRADE_PER_TICK / workPerCreep);
@@ -310,7 +371,7 @@ class EconomyManager {
 	 */
 
 	static _getSpareEnergy(room) {
-		if (room.storage) return room.storage.store.getUsedCapacity(RESOURCE_ENERGY) - config.UPGRADER_STORAGE_FLOOR;
+		if (room.storage) return this.getStoredEnergy(room) - this.getEnergyReserve(room);
 		var held = MainCache.find(room, FIND_STRUCTURES).reduce((sum, structure) => {
 			return structure.structureType === STRUCTURE_CONTAINER ? sum + structure.store.getUsedCapacity(RESOURCE_ENERGY) : sum;
 		}, 0);
@@ -328,8 +389,12 @@ class EconomyManager {
 			return sum + Math.max(0, site.progressTotal - site.progress);
 		}, 0);
 		if (remaining <= 0) return 0;
+		// a Builder spawned now could only stand idle, and would cost the reserve its body
+		if (this.isReserveLocked(room) && !this.isRebuildingOnlySpawn(room)) return 0;
 		return Math.min(config.BUILDER_MAX, 1 + Math.floor(remaining / config.BUILDER_PROGRESS_STEP));
 	}
 }
+
+EconomyManager.LEGACY_DEFAULT_RESERVE = 50000; // rooms used to save this default as if it were their own setting
 
 module.exports = EconomyManager;

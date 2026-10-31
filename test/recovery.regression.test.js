@@ -42,7 +42,7 @@ describe('Getting out of stuck states', function () {
     describe('workers whose source is destroyed', function () {
         it('pick another store instead of waiting for it forever', function () {
             const room = baseRoom('A');
-            const storage = addStructure(room, STRUCTURE_STORAGE, 'storage', 26, 25, makeStore(100000, { [RESOURCE_ENERGY]: 5000 }));
+            const storage = addStructure(room, STRUCTURE_STORAGE, 'storage', 26, 25, makeStore(100000, { [RESOURCE_ENERGY]: config.ECONOMY.ENERGY_RESERVE_MINIMUM + 5000 }));
             room.storage = storage;
             const creep = makeCreep(room, { name: 'up', pos: makePosition(room, 26, 26), capacity: 50, memory: { role: 'Upgrader', home: 'A', source: 'destroyed-container' } });
             Game.creeps.up = creep;

@@ -20,6 +20,10 @@ class Builder extends RolePrototype {
 		return EconomyManager.getBuilderWorkParts(room);
 	}
 
+	_mayDrawReserve(room) {
+		return EconomyManager.isRebuildingOnlySpawn(room);
+	}
+
 	/*
 	 * Just transfer energy between source and and the construction sites.
 	 */

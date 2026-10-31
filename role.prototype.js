@@ -274,7 +274,7 @@ class RolePrototype {
 
 		if (!source) return;
 
-		var harvestResult = source.structureType ? creep.withdraw(source, this._resourceType) : creep.harvest(source);
+		var harvestResult = source.structureType ? this._withdrawFrom(creep, source) : creep.harvest(source);
 		if (harvestResult == ERR_NOT_IN_RANGE) {
 			if (creep.memory.debug) {
 				info.log(this.symbol + ' ' + MainUtil.getDisplayName(creep) + ' is moving to source ' + MainUtil.getDisplayName(source), this._baseRoom);
@@ -288,6 +288,35 @@ class RolePrototype {
 			this._handleSourceWorkResult(creep, harvestResult);
 		}
 		return harvestResult;
+	}
+
+	/*
+	 * Takes no more from the reserve than the room may spend, so a large creep cannot carry it below
+	 * the line in one trip.
+	 */
+
+	_withdrawFrom(creep, store) {
+		if (this._resourceType !== RESOURCE_ENERGY || !this._baseRoom || !EconomyManager.isReserveStore(this._baseRoom, store) || this._mayDrawReserve(this._baseRoom)) {
+			return creep.withdraw(store, this._resourceType);
+		}
+		var amount = Math.min(creep.store.getFreeCapacity(RESOURCE_ENERGY), store.store.getUsedCapacity(RESOURCE_ENERGY), EconomyManager.getSpendableEnergy(this._baseRoom));
+		if (amount <= 0) return ERR_NOT_ENOUGH_RESOURCES;
+		var result = creep.withdraw(store, RESOURCE_ENERGY, amount);
+		if (result === OK) EconomyManager.noteWorkerWithdrawal(this._baseRoom, amount);
+		return result;
+	}
+
+	/*
+	 * Whether this role's work is worth more than the reserve right now. It is not, by default.
+	 */
+
+	_mayDrawReserve(room) {
+		return false;
+	}
+
+	_withoutReservedEnergy(room, stores) {
+		if (this._resourceType !== RESOURCE_ENERGY || !EconomyManager.isReserveLocked(room) || this._mayDrawReserve(room)) return stores;
+		return stores.filter(store => !EconomyManager.isGuardedStore(room, store));
 	}
 
 	/*
@@ -343,9 +372,10 @@ class RolePrototype {
 		return null;
 	}
 
-	// a worker remembers its source until it runs dry, which is no reason to keep draining a hauler's container
+	// a worker remembers its source until it runs dry, which is no reason to keep draining a hauler's
+	// container or the reserve
 	_isLeftToHaulers(store) {
-		if (!this._baseRoom || !EconomyManager.isSourceContainer(this._baseRoom, store)) return false;
+		if (!this._baseRoom || !EconomyManager.isGuardedStore(this._baseRoom, store)) return false;
 		return !this._findSources(this._baseRoom).some(source => source.id === store.id);
 	}
 
@@ -380,7 +410,7 @@ class RolePrototype {
 				(structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == constants.LINK_TYPE_TARGET)) &&
 				structure.store.getUsedCapacity(this._resourceType) > 0;
 		}) : [];
-		if (this._resourceType === RESOURCE_ENERGY) storages = EconomyManager.withoutSourceContainers(room, storages);
+		if (this._resourceType === RESOURCE_ENERGY) storages = EconomyManager.withoutSourceContainers(room, this._withoutReservedEnergy(room, storages));
 
 		return storages.concat(this._findActiveSources(room));
 	}

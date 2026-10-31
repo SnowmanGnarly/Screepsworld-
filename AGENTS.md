@@ -67,6 +67,7 @@ Although most files have `checkJs` disabled globally, `logistics.runner.js` opts
 
 - **Game rules:** use the engine constant (`CREEP_SPAWN_TIME`, `HEAL_POWER`, `CONTROLLER_STRUCTURES`). Never restate one as a literal.
 - **Values that follow from game state:** derive them in `manager.economy.js`, such as creep counts from source output and distance.
+- **Energy the room may spend:** `EconomyManager.getSpendableEnergy(room)`, the one definition. Workers, labs and factories stop at `getEnergyReserve(room)`; hauling to the spawn, extensions and towers, recovery Harvesters, a controller close to downgrading, and rebuilding the only spawn do not.
 - **Tunable policy:** a named entry in `main.config.js`. Console settings (`setSetting`) are listed there too.
 - **Per-room overrides:** `room.memory`. Manual quotas raise what a room derives; `roleConfig[role].auto = false` or `base.autoDemand = false` turns derived demand off.
 
@@ -213,6 +214,7 @@ Tests are local Mocha tests using Node assertions; they do not connect to a Scre
 - `test/loop.regression.test.js`: the heap copy of Memory against the engine's tick sequence, error boundaries and their reporting, the per-tick CPU budget, paused lab goals, and staggering.
 - `test/stress.e2e.test.js`: W1N1 through the real main loop for 2000 ticks on `test/helpers/simulator.js`, with the factory crashing at tick 500 and a global reset at 1200: economy, CPU, an exact energy balance, and a bucket held low. Run it alone with `npm run test:e2e`.
 - `test/director.regression.test.js`: goal triggers and their hysteresis, the defense check in every CPU tier, mission lifecycles, plan merging, and what survives a reset.
+- `test/reserve.regression.test.js`: the energy reserve: who stops at it, who does not, what workers leave to the haulers, creep demand, and the one definition shared with the terminal and Director.
 - `test/recovery.regression.test.js`: destroyed sources, stale hauler claims, outsourced spawning, lost bases, the per-tick CPU budget, emails, and remote accounting.
 - `test/priority.regression.test.js`: threat scoring, tower reserves, task order, spawn timing and placement limits.
 - `test/syntax.test.js`: syntax-checks every root-level `.js` file.

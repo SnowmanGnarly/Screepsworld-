@@ -42,6 +42,11 @@ class Harvester extends RolePrototype {
         });
     }
 
+    // feeding the spawn in a recovery is what the reserve is for
+    _mayDrawReserve(room) {
+        return true;
+    }
+
     _findSources(room) {
         var sources = this._findMinedEnergy(room);
         return sources.length > 0 ? sources : this._findStoredEnergy(room);
@@ -84,7 +89,9 @@ class Harvester extends RolePrototype {
             }
         });
 
-        if (room.controller && room.controller.my) {
+        // the exemption from the reserve is for feeding the spawn, not for upgrading with what is left over
+        var wouldUpgradeFromReserve = carriesStoredEnergy && EconomyManager.isReserveLocked(room);
+        if (room.controller && room.controller.my && !wouldUpgradeFromReserve) {
             structures.push(room.controller);
         }
 

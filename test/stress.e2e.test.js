@@ -1,7 +1,8 @@
 const assert = require('node:assert/strict');
-const { Simulator, buildStandardRoom } = require('./helpers/simulator');
+const { Simulator, buildStandardRoom, buildGrowingRoom } = require('./helpers/simulator');
 const FactoryManager = require('../manager.factory');
 const config = require('../main.config');
+const EconomyManager = require('../manager.economy');
 
 const TICKS = 2000;
 const CRASH_AT = 500;
@@ -167,6 +168,81 @@ describe('E2E: W1N1 runs 2000 ticks through the real main loop', function () {
                 assert.ok(tasks <= 100, tasks + ' logistics tasks');
                 assert.ok(statsSamples <= config.CPU.STATS_SAMPLES);
             });
+        });
+    });
+
+    describe('with the stored energy close to the reserve', function () {
+        const RESERVE = config.ECONOMY.ENERGY_RESERVE_MINIMUM;
+        let sim;
+        let drawTicks = 0;
+        let creeps;
+        let energyAvailable;
+        let energyCapacity;
+        let stored;
+
+        before(function () {
+            sim = new Simulator({ cpuLimit: CPU_LIMIT });
+            try {
+                buildStandardRoom(sim, { stored: RESERVE + 5000, terminalEnergy: 0 });
+                for (let tick = 1; tick <= TICKS; tick++) {
+                    sim.tick();
+                    if (sim.total('workerDraw', tick, tick) > 0) drawTicks++;
+                }
+                creeps = Object.values(Game.creeps).filter(creep => !creep.spawning).map(creep => creep.memory.role);
+                energyAvailable = Game.rooms.W1N1.energyAvailable;
+                energyCapacity = Game.rooms.W1N1.energyCapacityAvailable;
+                stored = EconomyManager.getStoredEnergy(Game.rooms.W1N1);
+            } finally {
+                sim.dispose();
+            }
+            console.log('      near the reserve: worker draws on ' + drawTicks + ' ticks, lowest stock after one ' + sim.lowestAfterWorkerDraw + ', final stock ' + stored + ', mined ' + sim.total('harvested') + ', upgraded ' + sim.total('upgraded') + ', built ' + sim.total('built'));
+        });
+
+        it('never lets a worker take the stock below the line', function () {
+            assert.ok(drawTicks > 0, 'workers did spend what was above it');
+            assert.ok(sim.lowestAfterWorkerDraw >= RESERVE, 'lowest ' + sim.lowestAfterWorkerDraw);
+        });
+
+        it('keeps haulers, Miners and the spawn working throughout', function () {
+            ['Miner', 'Storekeeper'].forEach(role => assert.ok(creeps.includes(role), role + ' alive'));
+            assert.ok(sim.total('collected', LATE_FROM) > 0, 'haulers still empty the containers');
+            assert.ok(sim.total('spawned', LATE_FROM - 500) > 0, 'creeps are still being replaced');
+            assert.ok(energyAvailable >= energyCapacity * 0.5, energyAvailable + '/' + energyCapacity);
+        });
+
+        it('turns income above the line into upgrades, without letting the stock sink', function () {
+            assert.ok(sim.total('upgraded') > 0);
+            assert.ok(stored >= RESERVE * 0.9, 'final stock ' + stored);
+        });
+
+        it('balances the energy books exactly, with no errors', function () {
+            const balance = sim.energyBalance();
+            assert.equal(balance.actual, balance.expected);
+            assert.deepEqual(sim.errors, []);
+        });
+    });
+
+    describe('with a room that has just built its storage', function () {
+        let sim;
+        let towers;
+
+        before(function () {
+            sim = new Simulator({ cpuLimit: CPU_LIMIT });
+            try {
+                buildGrowingRoom(sim);
+                for (let tick = 1; tick <= 3000; tick++) sim.tick();
+                towers = Game.rooms.W1N1.find(FIND_STRUCTURES).filter(structure => structure.structureType === STRUCTURE_TOWER).length;
+            } finally {
+                sim.dispose();
+            }
+            console.log('      growing room, 3000 ticks: built ' + sim.total('built') + ', upgraded ' + sim.total('upgraded') + ', towers ' + towers);
+        });
+
+        it('keeps building and upgrading: the reserve must not stall a room that is growing', function () {
+            assert.ok(sim.total('built', 1, 1000) > 0, 'building starts early');
+            assert.ok(sim.total('upgraded', 1, 1000) > 0, 'upgrading starts early');
+            assert.ok(towers >= 1, 'it has its first tower');
+            assert.deepEqual(sim.errors, []);
         });
     });
 

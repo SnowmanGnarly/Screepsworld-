@@ -242,7 +242,7 @@ describe('Energy that reaches the room', function () {
 
         it('needs fewer Upgraders as each one grows', function () {
             const { room } = sustainingRoom({ capacity: 2300, level: 6 });
-            addStorage(room, 25, 40, config.ECONOMY.UPGRADER_STORAGE_FLOOR);
+            addStorage(room, 25, 40, config.ECONOMY.ENERGY_RESERVE_MINIMUM + 1);
             MainCache.initRound([]);
             // 12 WORK wanted and 9 per creep
             assert.equal(EconomyManager.getDesiredUpgraders(room), 2);
@@ -261,14 +261,21 @@ describe('Energy that reaches the room', function () {
 
         it('drops to one while the storage rebuilds its reserve', function () {
             const { room } = sustainingRoom({ capacity: 2300, level: 6 });
-            addStorage(room, 25, 40, config.ECONOMY.UPGRADER_STORAGE_FLOOR - 1);
+            addStorage(room, 25, 40, config.ECONOMY.ENERGY_RESERVE_MINIMUM - 1);
+            MainCache.initRound([]);
+            assert.equal(EconomyManager.getDesiredUpgraders(room), 1);
+        });
+
+        it('stays at one exactly at the line, where there is nothing to spend', function () {
+            const { room } = sustainingRoom({ capacity: 2300, level: 6 });
+            addStorage(room, 25, 40, config.ECONOMY.ENERGY_RESERVE_MINIMUM);
             MainCache.initRound([]);
             assert.equal(EconomyManager.getDesiredUpgraders(room), 1);
         });
 
         it('adds Upgraders from savings above the reserve, up to the limit', function () {
             const { room } = sustainingRoom({ capacity: 2300, level: 6 });
-            addStorage(room, 25, 40, config.ECONOMY.UPGRADER_STORAGE_FLOOR + config.ECONOMY.UPGRADER_STORAGE_STEP);
+            addStorage(room, 25, 40, config.ECONOMY.ENERGY_RESERVE_MINIMUM + config.ECONOMY.UPGRADER_STORAGE_STEP);
             MainCache.initRound([]);
             assert.equal(EconomyManager.getDesiredUpgraders(room), 3);
             room.storage.store.set(RESOURCE_ENERGY, 900000);

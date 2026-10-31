@@ -31,9 +31,10 @@ const FIND_PATH_CPU = 1; // an estimate for one path across a room
 const FIELD_CACHE_LIMIT = 200;
 const SIZE = 50;
 
-const METRICS = ['harvested', 'hauled', 'collected', 'upgraded', 'built', 'repaired', 'spawned', 'factory', 'tower', 'decayed', 'linkLoss', 'reacted', 'sitesPlaced'];
+const METRICS = ['harvested', 'hauled', 'collected', 'upgraded', 'built', 'repaired', 'spawned', 'factory', 'tower', 'decayed', 'linkLoss', 'reacted', 'sitesPlaced', 'workerDraw'];
 const SPENT = ['upgraded', 'built', 'repaired', 'spawned', 'factory', 'tower', 'decayed', 'linkLoss'];
 const HAULERS = ['Storekeeper', 'Courier'];
+const WORKERS = ['Builder', 'Upgrader', 'Handyman'];
 const WALKABLE = new Set([STRUCTURE_ROAD, STRUCTURE_CONTAINER, STRUCTURE_RAMPART]);
 const NOT_OWNED = new Set([STRUCTURE_ROAD, STRUCTURE_CONTAINER, STRUCTURE_WALL]);
 
@@ -55,6 +56,8 @@ class Simulator {
         this.bucketPerTick = [];
         this.jobCpu = {};
         this.overLimit = 0;
+        this.lowestAfterWorkerDraw = Infinity; // haulers may go below the reserve for the spawn; workers may not
+        this.lowestAfterWorkerDraw = Infinity; // haulers may go below the reserve for the spawn; workers may not
         this.metrics = {};
         METRICS.forEach(metric => { this.metrics[metric] = []; });
         this._charged = 0;
@@ -389,6 +392,10 @@ class Simulator {
         intent('withdraw', function (original, args) {
             const { result, delta } = energyDelta(this, () => original.apply(this, args));
             if (result === OK && args[0].structureType === STRUCTURE_CONTAINER && HAULERS.includes(this.memory.role)) current._add('collected', delta);
+            if (result === OK && WORKERS.includes(this.memory.role) && (args[0].structureType === STRUCTURE_STORAGE || args[0].structureType === STRUCTURE_TERMINAL)) {
+                current._add('workerDraw', delta);
+                current.lowestAfterWorkerDraw = Math.min(current.lowestAfterWorkerDraw, current._storedEnergy(this.room));
+            }
             return result;
         });
         intent('pickup');
@@ -501,6 +508,14 @@ class Simulator {
         room._find[FIND_TOMBSTONES].push(tombstone);
         delete Game.creeps[creep.name];
         delete Game.objects[creep.id];
+    }
+
+    _storedEnergy(room) {
+        return [room.storage, room.terminal].reduce((sum, store) => sum + (store ? store.store.getUsedCapacity(RESOURCE_ENERGY) : 0), 0);
+    }
+
+    _storedEnergy(room) {
+        return [room.storage, room.terminal].reduce((sum, store) => sum + (store ? store.store.getUsedCapacity(RESOURCE_ENERGY) : 0), 0);
     }
 
     _dropResource(room, pos, resourceType, amount) {
@@ -837,7 +852,7 @@ class Simulator {
  * the whole workforce has to be replaced during a run.
  */
 
-function buildStandardRoom(simulator) {
+function buildStandardRoom(simulator, options = {}) {
     const room = simulator.addRoom('W1N1', { level: 7 });
     simulator.addSource(room, 'source-north', 8, 8);
     simulator.addSource(room, 'source-south', 42, 42);
@@ -846,9 +861,9 @@ function buildStandardRoom(simulator) {
 
     simulator.addSpawn(room, 'Spawn1', 25, 25);
     simulator.addStructure(room, STRUCTURE_STORAGE, 25, 28, {
-        id: 'storage', energy: 200000, contents: { [RESOURCE_HYDROGEN]: 3000, [RESOURCE_OXYGEN]: 3000 },
+        id: 'storage', energy: options.stored === undefined ? 200000 : options.stored, contents: { [RESOURCE_HYDROGEN]: 3000, [RESOURCE_OXYGEN]: 3000 },
     });
-    simulator.addStructure(room, STRUCTURE_TERMINAL, 27, 28, { id: 'terminal', energy: 20000 });
+    simulator.addStructure(room, STRUCTURE_TERMINAL, 27, 28, { id: 'terminal', energy: options.terminalEnergy === undefined ? 20000 : options.terminalEnergy });
     simulator.addStructure(room, STRUCTURE_FACTORY, 23, 28, { id: 'factory' });
     simulator.addStructure(room, STRUCTURE_TOWER, 25, 22, { id: 'tower', energy: 1000 });
     [[30, 30], [31, 30], [30, 31]].forEach(([x, y], index) => simulator.addStructure(room, STRUCTURE_LAB, x, y, { id: 'lab-' + index }));
@@ -875,4 +890,29 @@ function buildStandardRoom(simulator) {
     return room;
 }
 
-module.exports = { Simulator, buildStandardRoom };
+/*
+ * A room that has just built its storage, with construction still ahead of it.
+ */
+
+function buildGrowingRoom(simulator) {
+    const room = simulator.addRoom('W1N1', { level: 4 });
+    simulator.addSource(room, 'source-north', 8, 8);
+    simulator.addSource(room, 'source-south', 42, 42);
+    [[9, 9], [41, 41]].forEach(([x, y]) => simulator.addStructure(room, STRUCTURE_CONTAINER, x, y, { energy: 500 }));
+    simulator.addSpawn(room, 'Spawn1', 25, 25);
+    simulator.addStructure(room, STRUCTURE_STORAGE, 25, 28, { id: 'storage', energy: 2000 });
+    for (let index = 0; index < 10; index++) {
+        simulator.addStructure(room, STRUCTURE_EXTENSION, 16 + index, 20, { energy: EXTENSION_ENERGY_CAPACITY[4] });
+    }
+    const miner = [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE];
+    const hauler = [CARRY, CARRY, CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE, MOVE, MOVE];
+    simulator.addCreep(room, 'miner-north', 'Miner', miner, { x: 9, y: 9, ticksToLive: 1000, memory: { source: 'source-north' } });
+    simulator.addCreep(room, 'miner-south', 'Miner', miner, { x: 41, y: 41, ticksToLive: 1300, memory: { source: 'source-south' } });
+    simulator.addCreep(room, 'hauler-1', 'Storekeeper', hauler, { x: 24, y: 27, ticksToLive: 900 });
+    simulator.addCreep(room, 'hauler-2', 'Storekeeper', hauler, { x: 26, y: 27, ticksToLive: 1200 });
+    simulator.addCreep(room, 'upgrader-1', 'Upgrader', [WORK, WORK, CARRY, CARRY, MOVE, MOVE], { x: 39, y: 12, ticksToLive: 800 });
+    simulator.start();
+    return room;
+}
+
+module.exports = { Simulator, buildStandardRoom, buildGrowingRoom };

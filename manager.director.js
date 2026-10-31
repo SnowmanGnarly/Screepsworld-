@@ -21,6 +21,7 @@ var MainUtil = require('./main.util');
 var info = require('./main.info');
 var allConfig = require('./main.config');
 var CpuManager = require('./manager.cpu');
+var EconomyManager = require('./manager.economy');
 
 const config = allConfig.DIRECTOR;
 
@@ -206,19 +207,15 @@ class DirectorManager {
      */
 
     static _chooseEconomicGoal(room, current) {
-        var stored = this._getStoredEnergy(room);
+        var stored = EconomyManager.getStoredEnergy(room);
         var enter = config.STOCKPILE_ENTER[room.controller.level];
         if (room.storage && enter !== undefined) {
+            // saving up starts before workers run into the reserve, never after
+            enter = Math.max(enter, EconomyManager.getEnergyReserve(room));
             var line = current === GOAL_STOCKPILE ? enter + config.STOCKPILE_EXIT_MARGIN : enter;
             if (stored < line) return GOAL_STOCKPILE;
         }
         return this._canExpand(room, stored) ? GOAL_EXPAND : GOAL_UPGRADE;
-    }
-
-    // storage and terminal together, because moving stock between the two is not a loss of energy
-    static _getStoredEnergy(room) {
-        var inStore = structure => (structure ? structure.store.getUsedCapacity(RESOURCE_ENERGY) : 0);
-        return inStore(room.storage) + inStore(room.terminal);
     }
 
     /*

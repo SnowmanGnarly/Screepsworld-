@@ -14,6 +14,8 @@ Repository: [SnowmanGnarly/Screepsworld-](https://github.com/SnowmanGnarly/Scree
 
 If your scripts folder syncs to the game, saving a file there deploys it, broken or not. Do development somewhere else.
 
+**Your room keeps an energy reserve.** Builders, Upgraders, Handymen, labs, and factories won't spend storage and terminal energy below `ENERGY_RESERVE_MINIMUM` in `main.config.js`: 50,000 from RCL 6, and less below that so young rooms can still grow. They stand idle at the line, which is normal. Set `room.memory.terminal.emergencyReserve` to override it for one room. Haulers still feed the spawn, extensions, and towers from the reserve, and an Upgrader can draw on it if the controller is close to downgrading.
+
 **Don't edit Memory in the client's Memory panel.** The bot keeps `Memory` on the heap to save parsing, so panel edits and `RawMemory.set()` get overwritten on the next tick. Change it from the console instead, for example `Memory.rooms.W1N1.mayor.mode = 'warn'`.
 
 ## What runs on its own
@@ -182,6 +184,5 @@ The repository has no upload script or CI, and the npm commands don't upload any
 ## Known limitations
 
 - **Expansion needs a person:** something has to choose the room, place the flag, and spawn the Explorer. The Explorer path also has no test coverage.
-- **Workers can overspend:** Builders, Upgraders, and Handymen take from storage without respecting the energy reserve that labs and factories honor.
 - **The Director isn't connected:** rooms don't yet switch strategy on their own.
 - **Not built yet:** deposit harvesting, observer and power systems, and offensive warfare. See [TODO.md](./TODO.md) for the roadmap.
