@@ -11,7 +11,7 @@ const SETTING_DEFAULTS = {
 };
 
 module.exports = {
-	VERSION: '1.7.0', // keep in step with package.json; version() shows what the shard is running
+	VERSION: '1.9.0', // keep in step with package.json; version() shows what the shard is running
 
 	CPU: {
 		CRITICAL_BUCKET: 200, // below this only defense, logistics, spawning and creeps run
