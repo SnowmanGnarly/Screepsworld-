@@ -26,21 +26,54 @@ var MemoryManager = require('./manager.memory');
 var MainCache = require('./main.cache');
 var EconomyManager = require('./manager.economy');
 var LabManager = require('./manager.lab');
+var CpuManager = require('./manager.cpu');
 var MainHeap = require('./main.heap');
 var config = require('./main.config');
 
 class BaseManager {
 	
+	/*
+	 * Rooms take turns going first, so that if the CPU budget runs out it is never the same room's
+	 * creeps that stand still every tick.
+	 */
+
 	static runAll(allRoles = BaseManager.fetchAllRoles()) {
-	    MainUtil.findAllRooms().forEach(room => new BaseManager(room, allRoles).runBase());
+		// runs ahead of every room, so a bug in here would otherwise stop every creep we have
+		try {
+			BaseManager._adoptOrphans();
+		} catch (error) {
+			info.failure('adoptOrphans', 'Could not adopt orphaned creeps', error);
+		}
+		var rooms = MainUtil.findAllRooms();
+		var first = rooms.length > 0 ? Game.time % rooms.length : 0;
+		rooms.slice(first).concat(rooms.slice(0, first)).forEach(room => new BaseManager(room, allRoles).runBase());
+	}
+
+	/*
+	 * Creeps only run through the base they belong to, so a creep whose base is gone would stand
+	 * still until it dies. The nearest remaining base takes it in.
+	 */
+
+	static _adoptOrphans() {
+		var rooms = MainUtil.findAllRooms();
+		var bases = rooms.filter(room => room.memory.base && room.controller && room.controller.my);
+		if (bases.length === 0) return;
+		var names = new Set(rooms.filter(room => room.memory.base).map(room => room.memory.base.name));
+		MainCache.getCreeps().forEach(creep => {
+			if (names.has(creep.memory.home)) return;
+			var distance = room => Game.map.getRoomLinearDistance(creep.room.name, room.name);
+			var nearest = bases.slice().sort((a, b) => distance(a) - distance(b))[0];
+			info.log(MainUtil.getDisplayName(creep) + ' lost its base and joins ' + nearest.memory.base.name, nearest);
+			creep.memory.home = nearest.memory.base.name;
+			MainCache.resetCreepsByHome();
+		});
 	}
 
 	static _guard(room, label, action) {
 		try {
 			action();
 		} catch (error) {
-			info.error('Could not ' + label + ' for ' + room.name + ': ' + error, room);
-			console.log(error.stack);
+			info.failure(label + ':' + room.name, 'Could not ' + label + ' for ' + room.name, error, room);
 		}
 	}
     
@@ -122,10 +155,6 @@ class BaseManager {
     		this._spawnCreepForRole(bootstrapRole);
     		return;
     	}
-    	if (this._processMinerReplacements(baseName)) {
-    		return;
-    	}
-
     	var activeHarvesters = homeCreeps.filter(creep => creep.memory.role == 'Harvester' && !creep.spawning);
     	var isLastHarvester = !selfSustaining && activeHarvesters.length === 1;
     	if (isLastHarvester && activeHarvesters[0].ticksToLive < config.SPAWN.LAST_HARVESTER_TTL) {
@@ -150,22 +179,18 @@ class BaseManager {
     			continue;
     		}
     		var role = request.role;
-    		role._waitingForEnergy = false;
-    		role._spawnBaseName = baseName;
     		// the first creep of a role that moves energy is what refills the spawn, so it cannot wait.
     		// One that is only being replaced still can: its successor lives with this body for 1500 ticks
-    		role._mayWaitForEnergy = !(role.movesEnergy && !request.entry && this._countLivingCreeps(baseName, role) === 0);
-    		var spawned = false;
-    		try {
-    			spawned = request.entry ? this._spawnMissionRequest(request.entry) : this._spawnCreepForRole(role);
-    		} finally {
-    			role._mayWaitForEnergy = false;
-    		}
+    		var options = {
+    			baseName: baseName,
+    			mayWait: !(role.movesEnergy && !request.entry && this._countLivingCreeps(baseName, role) === 0),
+    		};
+    		var spawned = request.entry ? this._spawnMissionRequest(request.entry, options) : this._spawnCreepForRole(role, options);
     		if (spawned) {
     			delete waits[baseName];
     			return true;
     		}
-    		if (role._waitingForEnergy) {
+    		if (options.waitingForEnergy) {
     			return false;
     		}
     	}
@@ -193,7 +218,7 @@ class BaseManager {
      */
 
     _getRequiredNumber(role) {
-    	var manual = role.getManualQuota(this._room, MemoryManager.getRequiredNumberForRoomAndRole(this._room, role.roleName));
+    	var manual = MemoryManager.getRequiredNumberForRoomAndRole(this._room, role.roleName);
     	if (!role.alwaysDerived && !EconomyManager.isAutomatic(this._room, role.roleName)) return manual;
     	var roleConfig = this._room.memory.base.roleConfig[role.roleName] || {};
     	var derived = role.getDemand(this._room);
@@ -218,45 +243,6 @@ class BaseManager {
     	}).length;
     }
 
-    _processMinerReplacements(baseName) {
-        if (!Memory.minerReplacements) return false;
-        var requestNames = Object.keys(Memory.minerReplacements).filter(name => {
-            return Memory.minerReplacements[name].home === baseName;
-        }).sort((a, b) => {
-            return Memory.minerReplacements[a].created - Memory.minerReplacements[b].created;
-        });
-        for (var requestName of requestNames) {
-            var request = Memory.minerReplacements[requestName];
-            var requester = Game.creeps[requestName];
-            if (!requester || requester.memory.trainedReplacement || !request.sourceId) {
-                delete Memory.minerReplacements[requestName];
-                continue;
-            }
-            var miner = this._rolesByName.get('Miner');
-            if (!miner) {
-                delete Memory.minerReplacements[requestName];
-                continue;
-            }
-            var spawn = this._fetchFreeSpawn(baseName);
-            if (!spawn && this._room.memory.base.outsourceSpawn) {
-                spawn = this._fetchFreeSpawn();
-            }
-            if (spawn) {
-                var resultingCreep = miner._spawnCreepFromSpawn(spawn, request.sourceId);
-                if (resultingCreep) {
-                    resultingCreep.memory.home = baseName;
-                    requester.memory.trainedReplacement = true;
-                    delete Memory.minerReplacements[requestName];
-                    if (spawn.memory.debug) {
-                        info.log(miner.symbol + ' Spawning replacement Miner (' + resultingCreep.body.length + 'p)', this._room);
-                    }
-                }
-            }
-            return true;
-        }
-        return false;
-    }
-
     /*
      * A room that cannot hold the full reserve may spend once it is full; otherwise
      * nothing but Harvesters could ever spawn there and extensions would never be built.
@@ -268,7 +254,7 @@ class BaseManager {
 
     _needsLocalDefenders(baseName) {
         var defense = this._room.memory.defense;
-        if (!defense || !(defense.desiredDefenders > 0) || !(defense.threatLevel >= 2)) return false;
+        if (!defense || !(defense.desiredDefenders > 0) || !(defense.threatLevel >= config.DEFENSE.DEFENDER_THREAT_LEVEL)) return false;
         var localDefenders = MainCache.getCreepsByHome(baseName).filter(creep => {
             return creep.memory.role === 'Defender' && !creep.memory.missionId;
         }).length;
@@ -286,7 +272,7 @@ class BaseManager {
                     if (request && request.home === baseName) requests.push({ request, provider, providerName });
                 });
             } catch (error) {
-                info.error('Mission spawn provider ' + providerName + ' failed: ' + error, this._room);
+                info.failure('provider:' + providerName + ':' + this._room.name, 'Mission spawn provider ' + providerName + ' failed', error, this._room);
             }
         });
         requests.sort((a, b) => (b.request.priority || 0) - (a.request.priority || 0) ||
@@ -300,13 +286,13 @@ class BaseManager {
         });
     }
 
-    _spawnMissionRequest(entry) {
+    _spawnMissionRequest(entry, options) {
         var request = entry.request;
         var role = this._rolesByName.get(request.role);
         var spawn = this._fetchFreeSpawn(this._room.memory.base.name);
         if (!spawn && this._room.memory.base.outsourceSpawn) spawn = this._fetchFreeSpawn();
         if (!spawn) return false;
-        var resultingCreep = role.spawnMissionCreep(spawn, request);
+        var resultingCreep = role.spawnMissionCreep(spawn, request, options);
         if (!resultingCreep) return false;
         resultingCreep.memory.home = this._room.memory.base.name;
         if (entry.provider && typeof entry.provider.onSpawn === 'function') {
@@ -326,9 +312,11 @@ class BaseManager {
     	this._room.memory.base.recoveryWarningAt = Game.time;
     	var recoveryCost = BODYPART_COST[WORK] + BODYPART_COST[CARRY] + BODYPART_COST[MOVE];
     	info.warning('Emergency Harvester recovery needs a free eligible spawn with ' + recoveryCost + ' available energy.', this._room);
+    	info.notify('recovery:' + this._room.name, this._room.name + ' has no creeps and cannot spawn any.');
     }
 
     _spawnCreepForRole(role, options = {}) {    
+        options.baseRoom = this._room;
         var freeSpawn = this._fetchFreeSpawn(this._room.memory.base.name);
         if (freeSpawn) {
             var resultingCreep = role.spawnCreep(freeSpawn, options);
@@ -377,6 +365,7 @@ class BaseManager {
         MainCache.getCreepsByHome(baseName)
 	        	.filter(creep => !creep.spawning)
 	        	.forEach(creep => {
+            if (!CpuManager.hasCpuLeft()) return;
             try {
                 var creepRole = this._findNecessaryMandatoryRole(creep.memory.role);
                 if (LabManager.runCreep(creep, creepRole)) return;
@@ -392,8 +381,7 @@ class BaseManager {
                 	this._room.visual.text(creepRole.symbol, creep.pos.x, creep.pos.y, {align: 'left', opacity: 0.8});
                 }
             } catch (e) {
-                console.log(e.stack);
-                info.log(e);
+                info.failure('creep:' + creep.memory.role + ':' + this._room.name, creep.memory.role + ' in ' + this._room.name + ' failed', e, this._room);
             }
         });
     }

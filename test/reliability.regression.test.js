@@ -112,30 +112,28 @@ describe('Cross-cutting RAS regressions', function () {
         assert.equal(creep.memory.moveToGameObject, null);
     });
 
-    it('queues Miner replacement through BaseManager instead of spawning in the work loop', function () {
+    it('replaces a dying Miner through the queue, on the same source and in time', function () {
         const room = economyRoom();
         const spawn = addSpawn(room);
-        const requester = makeCreep(room, {
-            name: 'miner-old', body: new Array(7).fill(WORK), ticksToLive: 120,
-            memory: {
-                role: 'Miner', home: 'A', homeSpawn: spawn.name, source: 'source-1',
-                initialTicksToLive: 1500, ticksToSource: 1400,
-            },
+        const miner = new Miner();
+        const dying = makeCreep(room, {
+            name: 'dying', ticksToLive: 50, body: [WORK, WORK, MOVE, CARRY],
+            memory: { role: 'Miner', home: 'A', source: 'source-1', initialTicksToLive: 1500, ticksToSource: 1460 },
         });
         const harvester = makeCreep(room, { name: 'harvester', memory: { role: 'Harvester', home: 'A' } });
         const upgrader = makeCreep(room, { name: 'upgrader', memory: { role: 'Upgrader', home: 'A' } });
-        Game.creeps = { [requester.name]: requester, harvester, upgrader };
-        const miner = new Miner();
-        miner._commuteBetweenSourceAndTarget = () => {};
-        miner._baseRoom = room;
-        miner._work(requester);
-        assert.ok(Memory.minerReplacements && Memory.minerReplacements[requester.name]);
+        Game.creeps = { dying, harvester, upgrader };
+        const source = { id: 'source-1', room, pos: makePosition(room, 10, 10), energy: 3000, energyCapacity: 3000 };
+        setFind(room, FIND_SOURCES, [source]);
+        setFind(room, FIND_STRUCTURES, [makeStructure(room, STRUCTURE_CONTAINER, { pos: makePosition(room, 11, 11) })]);
+        assert.equal(miner.needsReplacement(dying), true, 'spawn time 12 + walk 40 is more than the 50 ticks left');
+        dying.ticksToLive = 60;
+        assert.equal(miner.needsReplacement(dying), false);
+        dying.ticksToLive = 50;
         const manager = new BaseManager(room, [miner, new Harvester(), new Upgrader()]);
         manager._repopulateCreeps();
         assert.equal(spawn.spawning.memory.role, 'Miner');
         assert.equal(spawn.spawning.memory.source, 'source-1');
-        assert.equal(requester.memory.trainedReplacement, true);
-        assert.equal(Memory.minerReplacements[requester.name], undefined);
     });
 
     it('proactively replaces the last aging Harvester before optional roles', function () {

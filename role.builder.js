@@ -10,7 +10,6 @@ class Builder extends RolePrototype {
 
 	constructor() {
 		super('Builder', '#ffff00', '🔨');
-	    this.priority = 70;
 	}
 
 	getDemand(room) {

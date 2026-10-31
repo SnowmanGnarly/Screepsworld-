@@ -6,7 +6,6 @@ class RemoteHauler extends RolePrototype {
 
     constructor() {
         super('RemoteHauler', '#ffdd66', '🚚');
-        this.priority = -5;
         this._disableAutomaticLoot = true;
     }
 
@@ -47,15 +46,23 @@ class RemoteHauler extends RolePrototype {
             if (resourceType !== RESOURCE_ENERGY) creep.drop(resourceType);
             return;
         }
-        var before = creep.store.getUsedCapacity(resourceType);
+        // a transfer only takes effect at the end of the tick, so the store cannot be measured after it
+        var delivered = Math.min(creep.store.getUsedCapacity(resourceType), target.store.getFreeCapacity(resourceType));
         var result = creep.transfer(target, resourceType);
         if (result === ERR_NOT_IN_RANGE) {
             this._moveToLocation(creep, target);
         } else if (result === OK && resourceType === RESOURCE_ENERGY) {
-            RemoteManager.recordEnergyDelivered(creep.memory.missionId,
-                before - creep.store.getUsedCapacity(resourceType));
+            RemoteManager.recordEnergyDelivered(creep.memory.missionId, delivered);
             creep.memory.trips = (creep.memory.trips || 0) + 1;
         }
+    }
+
+    // the first walk out, with an empty hauler, is what the route's hauling need is measured from
+    _recordArrival(creep) {
+        if (creep.memory.arrivalRecorded) return;
+        creep.memory.arrivalRecorded = true;
+        if (creep.memory.trips) return; // a hauler from before this was measured is not on its first walk
+        RemoteManager.recordHaulerArrival(creep.memory.missionId, CREEP_LIFE_TIME - creep.ticksToLive);
     }
 
     _findHomeStore(room, resourceType) {
@@ -74,6 +81,7 @@ class RemoteHauler extends RolePrototype {
         var destination = creep.memory.sourcePos || { roomName: creep.memory.targetRoom, x: 25, y: 25 };
         if (!this._moveToRoom(creep, destination)) return;
 
+        if (creep.pos.inRangeTo(destination.x, destination.y, RemoteHauler.ARRIVAL_RANGE)) this._recordArrival(creep);
         var dropped = MainCache.find(creep.room, FIND_DROPPED_RESOURCES, {
             filter: resource => resource.resourceType === RESOURCE_ENERGY && resource.amount > 0,
         }).sort((a, b) => b.amount - a.amount || creep.pos.getRangeTo(a) - creep.pos.getRangeTo(b));
@@ -103,5 +111,7 @@ class RemoteHauler extends RolePrototype {
         }
     }
 }
+
+RemoteHauler.ARRIVAL_RANGE = 3; // close enough to the source to count the walk as done
 
 module.exports = RemoteHauler;

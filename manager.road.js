@@ -15,8 +15,7 @@ class RoadManager extends TileWatcher {
 	    	try {
 	    		new RoadManager(room).watchRoom();
 	    	} catch (error) {
-	    		info.error('Could not watch roads for ' + room.name + ': ' + error, room);
-	    		console.log(error.stack);
+	    		info.failure('road:' + room.name, 'Could not watch roads for ' + room.name, error, room);
 	    	}
 	    });
 	}

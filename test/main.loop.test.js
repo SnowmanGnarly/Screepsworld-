@@ -35,8 +35,8 @@ describe('Main loop integration', function () {
         assert.equal(creeps.length, 1);
         assert.equal(creeps[0].memory.role, 'Harvester');
         assert.deepEqual(creeps[0].body, [WORK, CARRY, MOVE]);
-        assert.equal(room.memory.base.roleConfig.Harvester.requiredNumber, 1);
-        assert.equal(room.memory.base.roleConfig.Upgrader.requiredNumber, 1);
+        assert.equal(room.memory.base.roleConfig.Harvester.requiredNumber, 0, 'the room works out its own demand');
+        assert.equal(room.memory.base.roleConfig.Upgrader.requiredNumber, 0);
     });
 
     it('runs a configured home and remote economy through the full loop', function () {
@@ -108,6 +108,7 @@ describe('Main loop integration', function () {
     });
 
     it('spawns an automatic MineralMiner through the full loop at RCL 6', function () {
+        global.CONTROLLER_STRUCTURES[STRUCTURE_EXTRACTOR][6] = 1;
         const room = makeRoom('A', {
             memory: {
                 base: {

@@ -7,10 +7,10 @@ var config = require('./main.config');
 var MainUtil = require('./main.util');
 var info = require('./main.info');
 
-class GcManager {
+class CpuManager {
 
     /*
-	 * Displays the collected GC measurements.
+	 * Starts a new round of measurements.
 	 */
 
 	static initRound() {
@@ -35,12 +35,22 @@ class GcManager {
 	}
 
 	/*
+	 * A tick that hits the CPU limit is thrown away whole, so whatever has not run yet waits for the
+	 * next tick instead.
+	 */
+
+	static hasCpuLeft() {
+		if (!Game.cpu.tickLimit) return true;
+		return Game.cpu.getUsed() < Game.cpu.tickLimit * (1 - config.CPU.TICK_MARGIN);
+	}
+
+	/*
 	 * Returns the CPU tier for this tick. Higher tiers run more work.
 	 */
 
 	static getTier() {
-		if (Game.cpu.bucket < config.CPU.CRITICAL_BUCKET) return GcManager.TIER_CRITICAL;
-		return this._degraded ? GcManager.TIER_DEGRADED : GcManager.TIER_NORMAL;
+		if (Game.cpu.bucket < config.CPU.CRITICAL_BUCKET) return CpuManager.TIER_CRITICAL;
+		return this._degraded ? CpuManager.TIER_DEGRADED : CpuManager.TIER_NORMAL;
 	}
 
     /*
@@ -172,11 +182,11 @@ class GcManager {
 
 };
 
-GcManager.TIER_CRITICAL = 0;
-GcManager.TIER_DEGRADED = 1;
-GcManager.TIER_NORMAL = 2;
-GcManager._measurements = [];
-GcManager._format = new Intl.NumberFormat('en', { maximumSignificantDigits: 1 });
-GcManager._resetStatsWindow();
+CpuManager.TIER_CRITICAL = 0;
+CpuManager.TIER_DEGRADED = 1;
+CpuManager.TIER_NORMAL = 2;
+CpuManager._measurements = [];
+CpuManager._format = new Intl.NumberFormat('en', { maximumSignificantDigits: 1 });
+CpuManager._resetStatsWindow();
 
-module.exports = GcManager;
+module.exports = CpuManager;

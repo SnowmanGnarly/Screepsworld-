@@ -6,6 +6,7 @@ var MainUtil = require('./main.util');
 var MainInfo = require('./main.info');
 var MainCache = require('./main.cache');
 var MainConfig = require('./main.config');
+var MainMemhack = require('./main.memhack');
 var MainScheduler = require('./main.scheduler');
 
 var BaseManager = require('./manager.base');
@@ -30,13 +31,13 @@ var Miner = require('./role.miner');
 
 var TileArray = require('./tile.array');
 
-const MAYOR_INTERVAL = 10;
-
 // roles hold no state between ticks, so one set serves until the next global reset
 var allRoles = null;
 
 // The order is the tick order. Towers and links run ahead of spawning so that a problem in the
-// economy can never cost us our defense.
+// economy can never cost us our defense. Below the degraded bucket only creep life-support and
+// defense run: intel and remote planning keep creeps out of hostile rooms, and labs keep serving
+// boosted spawns while their reactions wait.
 const JOBS = [
     { name: 'initRound()', run: () => MemoryManager.initRound(allRoles) },
     { name: 'MainCache', run: () => MainCache.initRound(allRoles) },
@@ -45,14 +46,14 @@ const JOBS = [
     { name: 'DefenseManager', run: () => DefenseManager.runAll() },
     { name: 'TowerManager', run: () => TowerManager.runAll() },
     { name: 'LinkManager', run: () => LinkManager.runAll() },
-    { name: 'FactoryManager', tier: CpuManager.TIER_DEGRADED, run: () => FactoryManager.runAll() },
-    { name: 'LabManager', tier: CpuManager.TIER_DEGRADED, run: () => LabManager.runAll() },
-    { name: 'TerminalManager', tier: CpuManager.TIER_DEGRADED, run: () => TerminalManager.runAll() },
-    { name: 'MarketManager', tier: CpuManager.TIER_DEGRADED, run: () => MarketManager.runAll(CpuManager.shouldRunDeferred()) },
+    { name: 'FactoryManager', tier: CpuManager.TIER_NORMAL, run: () => FactoryManager.runAll() },
+    { name: 'LabManager', tier: CpuManager.TIER_DEGRADED, run: () => LabManager.runAll(CpuManager.shouldRunDeferred()) },
+    { name: 'TerminalManager', tier: CpuManager.TIER_NORMAL, run: () => TerminalManager.runAll() },
+    { name: 'MarketManager', tier: CpuManager.TIER_NORMAL, run: () => MarketManager.runAll() },
     { name: 'LogisticsManager', run: () => LogisticsManager.runAll() },
     { name: 'BaseManager', run: () => BaseManager.runAll(allRoles) },
     { name: 'RoadManager', tier: CpuManager.TIER_NORMAL, run: () => RoadManager.watchAllRooms() },
-    { name: 'MayorManager', tier: CpuManager.TIER_NORMAL, every: MAYOR_INTERVAL, run: () => MayorManager.runAll() },
+    { name: 'MayorManager', tier: CpuManager.TIER_NORMAL, run: () => MayorManager.runAll() },
     { name: 'Visuals', tier: CpuManager.TIER_NORMAL, enabled: () => MainConfig.getSetting('visuals'), run: () => {
         MainInfo.visualize();
         CpuManager.visualize();
@@ -61,24 +62,23 @@ const JOBS = [
 ];
 
 module.exports.loop = function () {
-    if (!allRoles) {
-        allRoles = BaseManager.fetchAllRoles();
-        MainInfo.log('Screepsworld ' + MainConfig.VERSION + ' loaded');
-    }
-    CpuManager.initRound();
+    MainScheduler.guard('MainMemhack', () => MainMemhack.initRound());
+    MainScheduler.guard('Setup', () => {
+        if (!allRoles) {
+            allRoles = BaseManager.fetchAllRoles();
+            MainInfo.log('Screepsworld ' + MainConfig.VERSION + ' loaded');
+        }
+        CpuManager.initRound();
+    });
     MainScheduler.run(JOBS);
+    MainMemhack.endRound();
 }
 
 // A count above zero is a floor over what the room derives. Zero means the operator wants none.
 function applyManualCount(roleConfig, count) {
     roleConfig.requiredNumber = count;
-    if (count === 0) {
-        roleConfig.auto = false;
-        delete roleConfig.pinned;
-    } else {
-        delete roleConfig.auto;
-        roleConfig.pinned = true; // tells this apart from a default the Mayor stored
-    }
+    if (count === 0) roleConfig.auto = false;
+    else delete roleConfig.auto;
 }
 
 // some helper methods to make managing this thing more easily
@@ -124,7 +124,7 @@ global.version = function () {
 
 global.fetchOldestCreep = function (baseName) {
     var oldestCreep = MainUtil.findAllCreeps().
-        filter(creep => (!baseName || creep.room.memory.home == baseName)).
+        filter(creep => (!baseName || creep.memory.home == baseName)).
         sort((a, b) => { return a.ticksToLive - b.ticksToLive });
 
     if (oldestCreep.length > 0) {

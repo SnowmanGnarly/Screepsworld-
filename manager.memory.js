@@ -8,6 +8,7 @@ var config = require('./main.config');
 var MainCache = require('./main.cache');
 var MainHeap = require('./main.heap');
 var MainMove = require('./main.move');
+var EconomyManager = require('./manager.economy');
 var MainUtil = require('./main.util');
 var info = require('./main.info');
 var IntelManager = require('./manager.intel');
@@ -67,6 +68,7 @@ class MemoryManager {
 			room.memory.base.roleConfig = defaultArray;
 		}
 		this._migrateBodyLimit(room.memory.base.roleConfig);
+		this._migrateDefaultQuotas(room, room.memory.base.roleConfig);
 		return room.memory.base.roleConfig;
 	}
 
@@ -79,6 +81,24 @@ class MemoryManager {
 		if (roleConfig.bodyVersion === this.BODY_VERSION) return;
 		if (roleConfig.partsMaxMultiplier === 5) delete roleConfig.partsMaxMultiplier;
 		roleConfig.bodyVersion = this.BODY_VERSION;
+	}
+
+	/*
+	 * The Mayor used to store a count of 1 for these roles in every automatic room. Rooms now work
+	 * out their own demand, and a stored count acts as a floor, so those would keep creeps nobody
+	 * asked for. It runs once, so a count set afterwards is respected.
+	 */
+
+	static _migrateDefaultQuotas(room, roleConfig) {
+		if (roleConfig.quotaVersion === this.QUOTA_VERSION) return;
+		// a room run by hand keeps its counts, and this runs once it goes automatic
+		var mayor = room.memory.mayor;
+		if (room.memory.base.autoDemand === false || (mayor && mayor.mode && mayor.mode !== 'auto')) return;
+		roleConfig.quotaVersion = this.QUOTA_VERSION;
+		['Harvester', 'Upgrader', 'Builder', 'Handyman'].forEach(roleName => {
+			var quota = roleConfig[roleName];
+			if (quota && quota.requiredNumber === 1 && quota.auto !== false) quota.requiredNumber = 0;
+		});
 	}
 
 	/*
@@ -182,7 +202,7 @@ class MemoryManager {
 	}
 
 	static _measureMemory() {
-		if (Game.time % 100 !== 0 || typeof RawMemory === 'undefined' || !RawMemory.get || this._memoryMeasuredAt === Game.time) return;
+		if (Game.time % config.MEMORY.MEASURE_INTERVAL !== 0 || typeof RawMemory === 'undefined' || !RawMemory.get || this._memoryMeasuredAt === Game.time) return;
 		this._memoryMeasuredAt = Game.time;
 		this._memorySize = RawMemory.get().length;
 		if (this._memorySize > 1500000 && (!this._lastMemoryWarning || Game.time - this._lastMemoryWarning > 500)) {
@@ -233,10 +253,12 @@ class MemoryManager {
 				}
 			}
 		}
+		// Miners now go through the spawn queue like every other role
+		delete Memory.minerReplacements;
 		IntelManager.ensureMemory();
 		IntelManager.cleanup();
-		if (Game.time % config.MEMORY.ROOM_PRUNE_INTERVAL === 0) this._pruneRoomMemory();
-		if (Game.time % config.MEMORY.STUCK_PRUNE_INTERVAL === 0) MainMove.prune();
+		if (Game.time % config.MEMORY.ROOM_PRUNE_INTERVAL === config.MEMORY.ROOM_PRUNE_PHASE) this._pruneRoomMemory();
+		if (Game.time % config.MEMORY.STUCK_PRUNE_INTERVAL === config.MEMORY.STUCK_PRUNE_PHASE) MainMove.prune();
 	}
 
 	/*
@@ -270,5 +292,6 @@ class MemoryManager {
 };
 
 MemoryManager.BODY_VERSION = 1;
+MemoryManager.QUOTA_VERSION = 1;
 
 module.exports = MemoryManager;

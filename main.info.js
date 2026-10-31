@@ -4,6 +4,7 @@
  
 var MainHeap = require('./main.heap');
 var MainUtil = require('./main.util');
+var config = require('./main.config');
 
 class MainInfo {
 
@@ -127,6 +128,48 @@ class MainInfo {
     }
     
     /*
+	 * Sends an email for a problem that needs the owner, since nobody reads the console while away.
+	 * One problem sends at most one email per interval, and the game bundles what arrives in between.
+	 *
+	 * @param key names the problem
+	 * @param message
+	 */
+
+	static notify(key, message) {
+		var last = MainHeap.namespace('notified')[key];
+		if (last !== undefined && Game.time - last < config.CPU.NOTIFY_INTERVAL) return;
+		MainHeap.namespace('notified')[key] = Game.time;
+		var shard = Game.shard ? '[' + Game.shard.name + '] ' : '';
+		Game.notify(shard + message, config.CPU.NOTIFY_GROUP_MINUTES);
+	}
+
+	/*
+	 * Reports an error that a boundary caught. A broken job or room fails every tick, so each key
+	 * logs at most once per ERROR_LOG_INTERVAL and emails at most once per NOTIFY_INTERVAL. This runs
+	 * inside a catch block, so it must never throw: that would take the rest of the tick with it.
+	 *
+	 * @param key names the problem
+	 * @param message
+	 * @param error
+	 * @param {Room} room
+	 */
+
+	static failure(key, message, error, room) {
+		try {
+			var failures = MainHeap.namespace('failures');
+			var last = failures[key];
+			if (last !== undefined && Game.time - last < config.CPU.ERROR_LOG_INTERVAL) return;
+			failures[key] = Game.time;
+			var text = message + ': ' + error;
+			this.error(text, room);
+			this.notify(key, text);
+			console.log(error && error.stack);
+		} catch (reportError) {
+			console.log('Could not report ' + key + ': ' + reportError);
+		}
+	}
+
+	/*
 	 * Logs the string to the UI console.
 	 * 
 	 * @param the new line
@@ -134,7 +177,7 @@ class MainInfo {
 	 */
     
 	static log(newLine, room) {   
-		var displayLine = typeof newLine === 'object' && newLine !== null ? JSON.stringify(newLine) : newLine;
+		var displayLine = newLine instanceof Error ? String(newLine) : typeof newLine === 'object' && newLine !== null ? JSON.stringify(newLine) : newLine;
 		if (typeof displayLine !== 'string') {
 			displayLine = String(displayLine);
 		}

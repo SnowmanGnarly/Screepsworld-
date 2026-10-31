@@ -14,13 +14,13 @@ const TIER = LabMatrix.TIER;
 
 class LabManager {
 
-    static runAll() {
+    static runAll(allowReactions = true) {
         MainUtil.findAllRooms().forEach(room => {
             if (!room.memory.base) return;
             try {
-                new LabManager(room).run();
+                new LabManager(room).run(allowReactions);
             } catch (error) {
-                info.error('Could not run labs for ' + room.name + ': ' + error, room);
+                info.failure('lab:' + room.name, 'Could not run labs for ' + room.name, error, room);
             }
         });
     }
@@ -59,15 +59,15 @@ class LabManager {
         var memory = Object.assign(defaults, room.memory.lab || {});
         delete memory.nextTopologyAt; // replaced by the heap's record of the last search
         memory.enabled = memory.enabled !== false;
-        memory.batchSize = this._clamp(memory.batchSize, 5, 100000, 1000);
-        memory.maxDepth = this._clamp(memory.maxDepth, 0, 10, 6);
-        memory.planningInterval = this._clamp(memory.planningInterval, 1, 1000, 10);
-        memory.requestExpiry = this._clamp(memory.requestExpiry, 1, 10000, 1000);
-        memory.priority = this._clamp(memory.priority, 0, 1000, 60);
+        memory.batchSize = MainUtil.clamp(memory.batchSize, 5, 100000, 1000);
+        memory.maxDepth = MainUtil.clamp(memory.maxDepth, 0, 10, 6);
+        memory.planningInterval = MainUtil.clamp(memory.planningInterval, 1, 1000, 10);
+        memory.requestExpiry = MainUtil.clamp(memory.requestExpiry, 1, 10000, 1000);
+        memory.priority = MainUtil.clamp(memory.priority, 0, 1000, 60);
         memory.goals = memory.goals || {};
         memory.reserves = memory.reserves && typeof memory.reserves === 'object' ? memory.reserves : {};
         Object.keys(memory.reserves).slice(0, LabManager.MAX_CONFIGURED_GOALS).forEach(resourceType => {
-            memory.reserves[resourceType] = this._clamp(memory.reserves[resourceType], 0, 1000000, 0);
+            memory.reserves[resourceType] = MainUtil.clamp(memory.reserves[resourceType], 0, 1000000, 0);
         });
         memory.assignments = memory.assignments && typeof memory.assignments === 'object' ? memory.assignments : {};
         memory.assignments.outputs = Array.isArray(memory.assignments.outputs) ? memory.assignments.outputs : [];
@@ -85,13 +85,13 @@ class LabManager {
                 if (!entry) return;
                 var resourceType = entry.resourceType || entry.resource;
                 var target = entry.target === undefined ? entry.amount : entry.target;
-                if (resourceType) goals[resourceType] = LabManager._clamp(target, 0, 1000000, 0);
+                if (resourceType) goals[resourceType] = MainUtil.clamp(target, 0, 1000000, 0);
             });
         } else if (configured && typeof configured === 'object') {
             Object.keys(configured).slice(0, LabManager.MAX_CONFIGURED_GOALS).forEach(resourceType => {
                 var value = configured[resourceType];
                 var target = value && typeof value === 'object' ? (value.target === undefined ? value.amount : value.target) : value;
-                goals[resourceType] = LabManager._clamp(target, 0, 1000000, 0);
+                goals[resourceType] = MainUtil.clamp(target, 0, 1000000, 0);
             });
         }
         Object.keys(goals).forEach(resourceType => {
@@ -100,7 +100,12 @@ class LabManager {
         return goals;
     }
 
-    run() {
+    /*
+     * Without reactions the goal holds still, but boost upkeep and the metadata that logistics reads
+     * carry on, so creeps that wait on a boost are still served.
+     */
+
+    run(allowReactions = true) {
         this._cleanBoostRequests();
         if (!this._memory.enabled) {
             this._cancelGoal('lab manager disabled');
@@ -109,12 +114,13 @@ class LabManager {
             return;
         }
 
+        this._creditSkippedTicks();
         this._cleanPreloads();
         this._topology = this._getTopology();
-        var goal = this._advance();
+        var goal = allowReactions ? this._advance() : this._pauseGoal();
 
         this._alignTopologyToStep(goal ? goal.steps[goal.stepIndex] : null);
-        if (goal) this._produceActive(goal);
+        if (goal && allowReactions) this._produceActive(goal);
         goal = this._memory.activeGoal;
         this._alignTopologyToStep(goal ? goal.steps[goal.stepIndex] : null);
         // after production, because this is what logistics reads later in the same tick
@@ -200,6 +206,20 @@ class LabManager {
             fsm.phase = next;
         }
         return this._memory.activeGoal;
+    }
+
+    // A goal cannot make progress while paused, so the pause must not count towards a stall.
+    _pauseGoal() {
+        this._getFsm().progressAt++;
+        return this._memory.activeGoal;
+    }
+
+    // Nor while this job did not run at all, as with a critical bucket or a tick that ran out of CPU.
+    _creditSkippedTicks() {
+        var lastRuns = MainHeap.namespace('labLastRun');
+        var last = lastRuns[this._room.name];
+        lastRuns[this._room.name] = Game.time;
+        if (last !== undefined && Game.time - last > 1) this._getFsm().progressAt += Game.time - last - 1;
     }
 
     _getFsm() {
@@ -373,7 +393,7 @@ class LabManager {
     _planRecipe(resourceType, amount, options = {}) {
         var plan = { resourceType, requestedAmount: amount, steps: [], imports: {}, invalid: [] };
         var available = this._getAvailableStockMap();
-        var maxDepth = LabManager._clamp(options.maxDepth, 0, 10, this._memory.maxDepth);
+        var maxDepth = MainUtil.clamp(options.maxDepth, 0, 10, this._memory.maxDepth);
         var visit = (resource, requiredAmount, depth, path) => {
             var recipe = this._recipes[resource];
             if (!recipe) {
@@ -724,7 +744,7 @@ class LabManager {
         Object.keys(policy).sort().forEach(partType => {
             if (partType === 'required') return;
             var resourceType = policy[partType];
-            if (!BOOSTS[resourceType] || !BOOSTS[resourceType][partType]) return;
+            if (!BOOSTS[partType] || !BOOSTS[partType][resourceType]) return;
             var count = body.filter(part => {
                 var type = typeof part === 'string' ? part : part.type;
                 return type === partType && (typeof part === 'string' || !part.boost);
@@ -952,13 +972,6 @@ class LabManager {
         return reservations;
     }
 
-    static _clamp(value, minimum, maximum, fallback) {
-        value = Number(value);
-        if (value === Infinity) return maximum;
-        if (value === -Infinity) return minimum;
-        if (!Number.isFinite(value)) return fallback;
-        return Math.max(minimum, Math.min(maximum, value));
-    }
 }
 
 LabManager.MAX_PHASE_HOPS = 5;

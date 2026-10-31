@@ -7,6 +7,36 @@ var MainCache = require('./main.cache');
 class MainUtil {
 
 	/*
+	 * Spreads per-room work over the ticks of an interval, so that rooms do not all spike on the same
+	 * tick. The turn follows from the name, so it holds when rooms come and go.
+	 *
+	 * @param roomName
+	 * @param interval
+	 */
+
+	static isRoomsTurn(roomName, interval) {
+		// FNV-1a, because neighbouring room names differ by little and a plain sum would bunch them
+		var hash = 2166136261;
+		for (var index = 0; index < roomName.length; index++) {
+			hash = Math.imul(hash ^ roomName.charCodeAt(index), 16777619);
+		}
+		return Game.time % interval === (hash >>> 0) % interval;
+	}
+
+	/*
+	 * Forces a number from Memory or the console into a range. Anything that is not a number gets
+	 * the fallback.
+	 */
+
+	static clamp(value, minimum, maximum, fallback) {
+		value = Number(value);
+		if (value === Infinity) return maximum;
+		if (value === -Infinity) return minimum;
+		if (!Number.isFinite(value)) return fallback;
+		return Math.max(minimum, Math.min(maximum, value));
+	}
+
+	/*
 	 * Finds all spawns in the game and puts them in an array.
 	 */
     

@@ -17,12 +17,11 @@ var RoomManager = require('./manager.room');
 class MayorManager {
 
 	static runAll() {
-		MainUtil.findAllRooms().forEach(room => {
+		MainUtil.findAllRooms().filter(room => MainUtil.isRoomsTurn(room.name, config.PLANNER.INTERVAL)).forEach(room => {
 			try {
 				new MayorManager(room).run();
 			} catch (e) {
-				info.error('Could not run Mayor for room ' + MainUtil.getDisplayName(room) + ': ' + e);
-				console.log(e.stack);
+				info.failure('mayor:' + room.name, 'Could not run Mayor for room ' + MainUtil.getDisplayName(room), e, room);
 			}
 		});
 	}
@@ -72,8 +71,7 @@ class MayorManager {
 			try {
 				this[method]();
 			} catch (e) {
-				info.error('Mayor validation ' + method + ' failed: ' + e, this._room);
-				console.log(e.stack);
+				info.failure('mayor:' + method + ':' + this._room.name, 'Mayor validation ' + method + ' failed', e, this._room);
 			}
 		});
 	}
@@ -82,7 +80,7 @@ class MayorManager {
 		if (this._cache.myCreeps.length == 0) {
 			return;
 		}
-		if (this._room.memory.base.roleConfig.Builder && this._room.memory.base.roleConfig.Builder.requiredNumber == 0) {
+		if (!EconomyManager.isAutomatic(this._room, 'Builder') && this._room.memory.base.roleConfig.Builder && this._room.memory.base.roleConfig.Builder.requiredNumber == 0) {
 			return;
 		}
 
@@ -132,43 +130,30 @@ class MayorManager {
 		var roleConfig = this._room.memory.base.roleConfig;
 		if (!roleConfig) return;
 
+		// the room works out what it needs for itself, so these only matter to an operator running it by hand
+		var isMissing = roleName => !EconomyManager.isAutomatic(this._room, roleName) && roleConfig[roleName] && roleConfig[roleName].requiredNumber == 0 && roleConfig[roleName].auto !== false;
+
 		// Harvesters
-		if (roleConfig.Harvester && roleConfig.Harvester.requiredNumber == 0 && roleConfig.Harvester.auto !== false) {
-			this.errors.push({
-				text: 'Harvester is missing.',
-				solution: 'Spawning Harvester.',
-				act: () => roleConfig.Harvester.requiredNumber = 1,
-			});
+		if (isMissing('Harvester')) {
+			this.errors.push({ text: 'Harvester is missing.', solution: 'Set a Harvester count.' });
 		}
 
 		// Upgraders
-		if (roleConfig.Upgrader && roleConfig.Upgrader.requiredNumber == 0 && roleConfig.Upgrader.auto !== false) {
-			this.errors.push({
-				text: 'Upgrader is missing.',
-				solution: 'Spawning Upgrader.',
-				act: () => roleConfig.Upgrader.requiredNumber = 1,
-			});
+		if (isMissing('Upgrader')) {
+			this.errors.push({ text: 'Upgrader is missing.', solution: 'Set an Upgrader count.' });
 		}
 
 		// Builders
-		if (this._cache.constructionSites.length > 0 && roleConfig.Builder && roleConfig.Builder.requiredNumber == 0 && roleConfig.Builder.auto !== false) {
-			this.warnings.push({
-				text: 'Builder is missing.',
-				solution: 'Spawning Builder.',
-				act: () => roleConfig.Builder.requiredNumber = 1,
-			});
+		if (this._cache.constructionSites.length > 0 && isMissing('Builder')) {
+			this.warnings.push({ text: 'Builder is missing.', solution: 'Set a Builder count.' });
 		}
 
 		// Handymen
 		if (!this._cache.structures) {
 			this._cache.structures = MainCache.find(this._room, FIND_STRUCTURES, { filter: s => s.hits < s.hitsMax });
 		}
-		if (this._cache.structures.length > 0 && roleConfig.Handyman && roleConfig.Handyman.requiredNumber == 0 && roleConfig.Handyman.auto !== false) {
-			this.warnings.push({
-				text: 'Handyman is missing.',
-				solution: 'Spawning Handyman.',
-				act: () => roleConfig.Handyman.requiredNumber = 1,
-			});
+		if (this._cache.structures.length > 0 && isMissing('Handyman')) {
+			this.warnings.push({ text: 'Handyman is missing.', solution: 'Set a Handyman count.' });
 		}
 	}
 
@@ -178,14 +163,14 @@ class MayorManager {
 				try {
 					if (error.act) error.act();
 				} catch (e) {
-					info.error('Could not fix error "' + error.text + '": ' + e);
+					info.failure('mayor:fix:' + this._room.name + ':' + error.text, 'Could not fix error "' + error.text + '"', e, this._room);
 				}
 			});
 			this.warnings.forEach(warning => {
 				try {
 					if (warning.act) warning.act();
 				} catch (e) {
-					info.error('Could not fix warning "' + warning.text + '": ' + e);
+					info.failure('mayor:fix:' + this._room.name + ':' + warning.text, 'Could not fix warning "' + warning.text + '"', e, this._room);
 				}
 			});
 		}
@@ -258,6 +243,9 @@ class MayorManager {
 
 	_isStructureEnabled(structureType) {
 		if (structureType === STRUCTURE_NUKER) return !!this._memory.enableNuker;
+		// no code uses these yet, so they would only cost energy
+		if (structureType === STRUCTURE_POWER_SPAWN) return !!this._memory.enablePowerSpawn;
+		if (structureType === STRUCTURE_OBSERVER) return !!this._memory.enableObserver;
 		if (structureType === STRUCTURE_WALL || structureType === STRUCTURE_RAMPART) {
 			return !!this._memory.enableFortification;
 		}
@@ -367,20 +355,21 @@ class MayorManager {
 			return this._findClearTileAround(anchorFact, 1, 2);
 		}
 
-		// 6. Links: sources are senders; controller and storage are receivers
+		// 6. Links: the storage receiver first, because nothing a source sends reaches the room
+		// without it. Then the sources, and last the controller
 		if (structureType === STRUCTURE_LINK) {
 			var links = this._getStructuresAndSites(STRUCTURE_LINK);
+			if (this._room.storage && !this._hasLinkRoleNear(links, this._room.storage.pos, constants.LINK_TYPE_TARGET)) {
+				return this._placeLinkNear(this._room.storage.pos, constants.LINK_TYPE_TARGET);
+			}
 			var sources = MainCache.find(this._room, FIND_SOURCES);
 			for (var s = 0; s < sources.length; s++) {
 				if (!this._hasLinkRoleNear(links, sources[s].pos, constants.LINK_TYPE_SOURCE)) {
-					return this._placeLinkNear(sources[s].pos, constants.LINK_TYPE_SOURCE);
+					return this._placeSourceLink(sources[s]);
 				}
 			}
 			if (this._room.controller && !this._hasLinkRoleNear(links, this._room.controller.pos, constants.LINK_TYPE_TARGET)) {
 				return this._placeLinkNear(this._room.controller.pos, constants.LINK_TYPE_TARGET, 2);
-			}
-			if (this._room.storage && !this._hasLinkRoleNear(links, this._room.storage.pos, constants.LINK_TYPE_TARGET)) {
-				return this._placeLinkNear(this._room.storage.pos, constants.LINK_TYPE_TARGET);
 			}
 		}
 
@@ -431,8 +420,20 @@ class MayorManager {
 		return constants.LINK_TYPE_SOURCE;
 	}
 
-	_placeLinkNear(anchorPos, role, minRange = 1) {
-		var position = this._findClearTileAround(anchorPos, minRange, 2);
+	/*
+	 * A Miner stands on its container and can only reach what touches it, so the link goes there.
+	 */
+
+	_placeSourceLink(source) {
+		var container = MainCache.find(this._room, FIND_STRUCTURES).find(structure => {
+			return structure.structureType === STRUCTURE_CONTAINER && structure.pos.isNearTo(source.pos);
+		});
+		var isBesideContainer = position => !container || position.isNearTo(container.pos);
+		return this._placeLinkNear(source.pos, constants.LINK_TYPE_SOURCE, 1, isBesideContainer);
+	}
+
+	_placeLinkNear(anchorPos, role, minRange = 1, additionalFilter) {
+		var position = this._findClearTileAround(anchorPos, minRange, 2, additionalFilter);
 		if (position) {
 			this._getRoomManagerMemory().linkRoles[position.x + ',' + position.y] = role;
 		}

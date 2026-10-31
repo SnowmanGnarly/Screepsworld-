@@ -14,7 +14,6 @@ class Harvester extends RolePrototype {
 
     constructor() {
         super('Harvester', '#ffffff', '🧺');
-        this.priority = 100;
         this.movesEnergy = true;
         this._sourceMode = RolePrototype.SOURCE_MODE_USE_IF_VALID;
     }
@@ -23,26 +22,15 @@ class Harvester extends RolePrototype {
         return EconomyManager.getDesiredHarvesters(room);
     }
 
-    /*
-     * The Mayor stores a quota of 1 for every room, so 1 says nothing about what the operator wants.
-     * A higher number, or a count set with setCreepCount, does.
-     */
-
-    getManualQuota(room, manual) {
-        var roleConfig = room.memory.base.roleConfig[this.roleName] || {};
-        var isDefault = manual === 1 && !roleConfig.pinned && EconomyManager.isAutomatic(room, this.roleName);
-        return isDefault && EconomyManager.isSelfSustaining(room) ? 0 : manual;
-    }
-
     _getUsefulBodyUnits(room) {
         return EconomyManager.getHarvestWorkParts();
     }
 
     spawnCreep(spawn, options = {}) {
         if (options.emergency) {
-            return this._spawnCreepWithParts(spawn, [WORK, CARRY, MOVE], [], { exact: true });
+            return this._spawnCreepWithParts(spawn, [WORK, CARRY, MOVE], [], { exact: true, emergency: true });
         }
-        return super.spawnCreep(spawn);
+        return super.spawnCreep(spawn, options);
     }
 
     _work(creep) {
@@ -55,6 +43,11 @@ class Harvester extends RolePrototype {
     }
 
     _findSources(room) {
+        var sources = this._findMinedEnergy(room);
+        return sources.length > 0 ? sources : this._findStoredEnergy(room);
+    }
+
+    _findMinedEnergy(room) {
         var containers = this._useStorageAsSource ? MainCache.find(room, FIND_STRUCTURES, {
             filter: structure => structure.structureType == STRUCTURE_CONTAINER &&
                 structure.store.getUsedCapacity(RESOURCE_ENERGY) > 0
@@ -62,11 +55,26 @@ class Harvester extends RolePrototype {
         return containers.concat(this._findActiveSources(room));
     }
 
+    /*
+     * Miners hold every source and nothing sits in a container. A recovery Harvester can still feed
+     * the spawn from what the room has saved, which is what lets the haulers come back.
+     */
+
+    _findStoredEnergy(room) {
+        if (!this._useStorageAsSource) return [];
+        return [room.storage, EconomyManager.getHubLink(room)].filter(store => {
+            return store && store.store.getUsedCapacity(RESOURCE_ENERGY) > 0;
+        });
+    }
+
     _findTargets(room) {
         const claimedTargets = LogisticsManager.getClaims(room).targets;
+        // energy taken from the storage has to go somewhere else, or the creep would only carry it back
+        const carriesStoredEnergy = this._findMinedEnergy(room).length === 0;
         const structures = MainCache.find(room, FIND_MY_STRUCTURES, {
             filter: (structure) => {
                 if (claimedTargets.has(structure.id)) return false;
+                if (carriesStoredEnergy && (structure.structureType == STRUCTURE_STORAGE || structure.structureType == STRUCTURE_LINK)) return false;
                 return (structure.structureType == STRUCTURE_EXTENSION ||
                     structure.structureType == STRUCTURE_SPAWN ||
                     structure.structureType == STRUCTURE_STORAGE ||

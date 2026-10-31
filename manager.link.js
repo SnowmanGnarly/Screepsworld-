@@ -23,8 +23,7 @@ class LinkManager {
 	    	try {
 	    		new LinkManager(room).runLinks();
 	    	} catch (error) {
-	    		info.error('Could not run links for ' + room.name + ': ' + error, room);
-	    		console.log(error.stack);
+	    		info.failure('link:' + room.name, 'Could not run links for ' + room.name, error, room);
 	    	}
 	    });
 	}
@@ -58,6 +57,10 @@ class LinkManager {
 
 	static _makeLinkType(linkId, type) {
 		var object = Game.getObjectById(linkId);
+		if (!object) {
+			info.error('Could not find link: ' + linkId);
+			return;
+		}
 		var memory = MainUtil.fetchMemoryOfStructure(object);
 		memory.type = type; 
 	}
@@ -146,7 +149,6 @@ class LinkManager {
 	 */
 	
 	_findTargetLink(sourceLink) { 
-		// TODO: sort by capacity?
 		var targetLinks = MainCache.find(this._room, FIND_MY_STRUCTURES, {
 	        filter: (structure) => {
 	        	if (structure.structureType != STRUCTURE_LINK) {
@@ -162,7 +164,8 @@ class LinkManager {
 			}
 			return null;
 		}
-		return targetLinks[0];
+		// the emptiest first, so that a full controller link does not hold energy back from the storage
+		return targetLinks.sort((a, b) => b.store.getFreeCapacity(RESOURCE_ENERGY) - a.store.getFreeCapacity(RESOURCE_ENERGY))[0];
 	}
 };
 

@@ -1,12 +1,12 @@
 /*
  * Runs the tick as a table of jobs. A job that throws is reported and the next job still runs,
  * so one bug cannot silence towers or leave creeps standing. Each job names the lowest CPU tier
- * it may run in and, optionally, how many ticks to leave between runs.
+ * it may run in and, optionally, the ticks it runs on: every `every` ticks, offset by `phase`.
+ * Fixed ticks keep two jobs apart, and a global reset cannot bunch them onto its expensive tick.
  *
- * Job: { name, run, tier = CpuManager.TIER_CRITICAL, every = 1, enabled = () => true }
+ * Job: { name, run, tier = CpuManager.TIER_CRITICAL, every = 1, phase = 0, enabled = () => true }
  */
 
-var config = require('./main.config');
 var info = require('./main.info');
 var CpuManager = require('./manager.cpu');
 
@@ -14,42 +14,35 @@ class MainScheduler {
 
 	static run(jobs) {
 		var tier = CpuManager.getTier();
-		jobs.forEach(job => {
-			if (this._isDue(job, tier)) this._runJob(job);
-		});
+		jobs.forEach(job => this._runIfDue(job, tier));
 	}
 
-	static reset() {
-		this._lastRun = {};
-		this._lastError = {};
-	}
+	/*
+	 * Runs work that is not a job in the table, under the same boundary.
+	 */
 
-	static _isDue(job, tier) {
-		if (tier < (job.tier === undefined ? CpuManager.TIER_CRITICAL : job.tier)) return false;
-		if (job.enabled && !job.enabled()) return false;
-		var last = this._lastRun[job.name];
-		// a job that has not run since the last global reset is always due
-		return last === undefined || Game.time - last >= (job.every || 1);
-	}
-
-	static _runJob(job) {
-		this._lastRun[job.name] = Game.time;
+	static guard(name, action) {
 		try {
-			CpuManager.measure(job.name, job.run);
+			action();
 		} catch (error) {
-			this._reportError(job, error);
+			info.failure('job:' + name, 'Job ' + name + ' failed', error);
 		}
 	}
 
-	static _reportError(job, error) {
-		var last = this._lastError[job.name];
-		if (last !== undefined && Game.time - last < config.CPU.ERROR_LOG_INTERVAL) return;
-		this._lastError[job.name] = Game.time;
-		info.error('Job ' + job.name + ' failed: ' + error);
-		console.log(error && error.stack);
+	static _runIfDue(job, tier) {
+		this.guard(job.name, () => {
+			if (this._isDue(job, tier)) CpuManager.measure(job.name, job.run);
+		});
+	}
+
+	static _isDue(job, tier) {
+		var jobTier = job.tier === undefined ? CpuManager.TIER_CRITICAL : job.tier;
+		if (tier < jobTier) return false;
+		// anything that can wait a tick must not be what tips this one over the limit
+		if (jobTier > CpuManager.TIER_CRITICAL && !CpuManager.hasCpuLeft()) return false;
+		if (job.enabled && !job.enabled()) return false;
+		return !job.every || Game.time % job.every === (job.phase || 0);
 	}
 }
-
-MainScheduler.reset();
 
 module.exports = MainScheduler;

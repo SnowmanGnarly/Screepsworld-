@@ -45,9 +45,13 @@ class LogisticsRunner {
         }
 
         var available = LogisticsManager.getResourceAmount(source, task.resourceType);
-        var amount = Math.min(available, task.remaining, (creep.store.getFreeCapacity(task.resourceType) || 0));
+        var wanted = LogisticsManager.getPickupAmount(creep.room, task);
+        var amount = Math.min(available, wanted, (creep.store.getFreeCapacity(task.resourceType) || 0));
         if (amount <= 0) {
+            // nothing to collect here, so let go of the task rather than wait beside an empty store
             task.retryAfter = Game.time + config.RETRY_TICKS;
+            LogisticsManager.releaseTask(creep.room, task.id);
+            delete (/** @type {any} */ (creep.memory)).taskId;
             return;
         }
 
@@ -62,6 +66,7 @@ class LogisticsRunner {
 
         if (result === OK) {
             task.lastProgress = Game.time;
+            task.claimedAmount = amount;
             return;
         }
         if (result === ERR_NOT_IN_RANGE) {

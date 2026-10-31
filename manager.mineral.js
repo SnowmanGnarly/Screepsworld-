@@ -9,7 +9,9 @@ class MineralManager {
             deliveryTargets: [],
             hasInfrastructure: false,
         };
-        if (!room || !room.controller || !room.controller.my || room.controller.level < 6) return state;
+        if (!room || !room.controller || !room.controller.my) return state;
+        var extractorLimits = CONTROLLER_STRUCTURES[STRUCTURE_EXTRACTOR];
+        if (!extractorLimits || !extractorLimits[room.controller.level]) return state;
 
         var minerals = MainCache.find(room, FIND_MINERALS);
         if (minerals.length === 0) return state;

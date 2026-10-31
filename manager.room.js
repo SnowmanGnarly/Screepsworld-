@@ -248,7 +248,7 @@ class RoomManager {
 
 	_countMissingTiles(array, tile) {
 		var limits = CONTROLLER_STRUCTURES[tile.structureType];
-		var wanted = limits && limits[8] || 0;
+		var wanted = limits && limits[config.MAX_RCL] || 0;
 		if (wanted <= 0) return 0;
 		var isOffPlan = object => object.structureType === tile.structureType &&
 			array.get(object.pos.x, object.pos.y) !== tile.character;
@@ -337,7 +337,7 @@ class RoomManager {
 
 	_planLabCluster(array, spawn, reserved) {
 		var limits = CONTROLLER_STRUCTURES[STRUCTURE_LAB];
-		if (!limits || !limits[8] || this._countPlanned(array, RoomManager.TILE_LAB) > 0) return;
+		if (!limits || !limits[config.MAX_RCL] || this._countPlanned(array, RoomManager.TILE_LAB) > 0) return;
 		var isLab = object => object.structureType === STRUCTURE_LAB;
 		if (MainCache.find(this._room, FIND_STRUCTURES).some(isLab) || MainCache.find(this._room, FIND_MY_CONSTRUCTION_SITES).some(isLab)) return;
 
@@ -374,7 +374,7 @@ class RoomManager {
 	 */
 
 	_getExtensionsCount() {
-		return CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION][8];
+		return CONTROLLER_STRUCTURES[STRUCTURE_EXTENSION][config.MAX_RCL];
 	}
 
 	_findExtensionPointsForSpawn(array, spawn, limit = array.width * array.height, reserved = new Set()) {

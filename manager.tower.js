@@ -16,8 +16,7 @@ class TowerManager {
             try {
                 new TowerManager(room).runTowers();
             } catch (error) {
-                info.error('Could not run towers for ' + room.name + ': ' + error, room);
-                console.log(error.stack);
+                info.failure('tower:' + room.name, 'Could not run towers for ' + room.name, error, room);
             }
         });
     }
@@ -50,7 +49,7 @@ class TowerManager {
             filter: structure => {
                 return (structure.structureType === STRUCTURE_SPAWN ||
                     structure.structureType === STRUCTURE_TOWER || structure.structureType === STRUCTURE_STORAGE) &&
-                    structure.hits < structure.hitsMax * constants.TOWER_EMERGENCY_REPAIR_RATIO;
+                    structure.hits < structure.hitsMax * config.DEFENSE.TOWER_EMERGENCY_REPAIR_RATIO;
             }
         });
     }
@@ -65,7 +64,7 @@ class TowerManager {
             }
         }
 
-        var hasReserve = energy >= constants.TOWER_ENERGY_RESERVE + TOWER_ENERGY_COST;
+        var hasReserve = energy >= config.DEFENSE.TOWER_ENERGY_RESERVE + TOWER_ENERGY_COST;
         if (!hasReserve) return;
 
         if (damagedCreeps.length > 0) {

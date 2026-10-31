@@ -3,6 +3,8 @@ var MainUtil = require('./main.util');
 var IntelManager = require('./manager.intel');
 var RoadManager = require('./manager.road');
 var info = require('./main.info');
+var config = require('./main.config');
+var EconomyManager = require('./manager.economy');
 
 class RemoteManager {
 
@@ -16,7 +18,7 @@ class RemoteManager {
                 this._updateROI(mission);
                 if (allowExpensive) this._planConstruction(mission);
             } catch (error) {
-                info.error('Could not run remote mission ' + mission.id + ': ' + error);
+                info.failure('remote:' + mission.id, 'Could not run remote mission ' + mission.id, error);
             }
         });
     }
@@ -45,9 +47,9 @@ class RemoteManager {
             home: home,
             targetRoom: targetRoom,
         });
-        mission.maxDistance = this._clamp(mission.maxDistance, 1, 10, RemoteManager.DEFAULT_MAX_DISTANCE);
-        mission.maxHaulers = this._clamp(mission.maxHaulers, 0, RemoteManager.MAX_HAULERS_PER_OUTPOST, RemoteManager.DEFAULT_MAX_HAULERS);
-        mission.maxSites = this._clamp(mission.maxSites, 0, RemoteManager.MAX_SITES_PER_OUTPOST, RemoteManager.DEFAULT_MAX_SITES);
+        mission.maxDistance = MainUtil.clamp(mission.maxDistance, 1, 10, RemoteManager.DEFAULT_MAX_DISTANCE);
+        mission.maxHaulers = MainUtil.clamp(mission.maxHaulers, 0, RemoteManager.MAX_HAULERS_PER_OUTPOST, RemoteManager.DEFAULT_MAX_HAULERS);
+        mission.maxSites = MainUtil.clamp(mission.maxSites, 0, RemoteManager.MAX_SITES_PER_OUTPOST, RemoteManager.DEFAULT_MAX_SITES);
         empire.missions[id] = mission;
         this._normalizeMission(mission);
         return mission;
@@ -130,14 +132,14 @@ class RemoteManager {
     static _normalizeMission(mission) {
         mission.enabled = mission.enabled !== false;
         mission.status = mission.status || 'active';
-        mission.maxDistance = this._clamp(mission.maxDistance, 1, 10, RemoteManager.DEFAULT_MAX_DISTANCE);
+        mission.maxDistance = MainUtil.clamp(mission.maxDistance, 1, 10, RemoteManager.DEFAULT_MAX_DISTANCE);
         // missions saved before the cap became a safety ceiling hold the old default
         if (mission.haulerCapVersion !== RemoteManager.HAULER_CAP_VERSION) {
             if (mission.maxHaulers === RemoteManager.LEGACY_DEFAULT_MAX_HAULERS) mission.maxHaulers = RemoteManager.DEFAULT_MAX_HAULERS;
             mission.haulerCapVersion = RemoteManager.HAULER_CAP_VERSION;
         }
-        mission.maxHaulers = this._clamp(mission.maxHaulers, 0, RemoteManager.MAX_HAULERS_PER_OUTPOST, RemoteManager.DEFAULT_MAX_HAULERS);
-        mission.maxSites = this._clamp(mission.maxSites, 0, RemoteManager.MAX_SITES_PER_OUTPOST, RemoteManager.DEFAULT_MAX_SITES);
+        mission.maxHaulers = MainUtil.clamp(mission.maxHaulers, 0, RemoteManager.MAX_HAULERS_PER_OUTPOST, RemoteManager.DEFAULT_MAX_HAULERS);
+        mission.maxSites = MainUtil.clamp(mission.maxSites, 0, RemoteManager.MAX_SITES_PER_OUTPOST, RemoteManager.DEFAULT_MAX_SITES);
         mission.sources = Array.isArray(mission.sources) ? mission.sources.slice(0, 8) : [];
         mission.defense = Object.assign({ threatLevel: 0, desiredDefenders: 0 }, mission.defense || {});
         mission.stats = Object.assign({
@@ -153,7 +155,7 @@ class RemoteManager {
         }, mission.stats || {});
         Object.keys(mission.stats).forEach(key => {
             if (typeof mission.stats[key] === 'number') {
-                mission.stats[key] = this._clamp(mission.stats[key], -RemoteManager.MAX_METRIC, RemoteManager.MAX_METRIC, 0);
+                mission.stats[key] = MainUtil.clamp(mission.stats[key], -RemoteManager.MAX_METRIC, RemoteManager.MAX_METRIC, 0);
             }
         });
         if (!mission.homeRoom) {
@@ -208,8 +210,8 @@ class RemoteManager {
             this._normalizeMission(mission);
             this._refreshMission(mission);
             if (!this._isOperational(mission)) return;
-            this._addDefenseRequest(mission, requests);
-            if (mission.defense.threatLevel >= 2) return;
+            this._addDefenseRequest(mission, requests, baseRoom);
+            if (mission.defense.threatLevel >= config.DEFENSE.DEFENDER_THREAT_LEVEL) return;
             this._addScoutRequest(mission, requests);
             this._addReserverRequest(mission, requests, baseRoom);
             this._addEconomyRequests(mission, baseRoom, requests);
@@ -217,13 +219,26 @@ class RemoteManager {
         return requests.slice(0, RemoteManager.MAX_SPAWN_REQUESTS_PER_HOME);
     }
 
-    static _addDefenseRequest(mission, requests) {
+    /*
+     * A defender only helps if it can win. One small invader has 1000 hits and out-damages a single
+     * part many times over, so this sends the largest body the room can pay for.
+     */
+
+    static getDefenderBody(style, baseRoom) {
+        var unit = style === 'ranged' ? [RANGED_ATTACK, MOVE] : style === 'support' ? [HEAL, MOVE] : [ATTACK, MOVE];
+        var capacity = baseRoom && baseRoom.energyCapacityAvailable || 0;
+        var units = Math.max(1, Math.min(config.REMOTE.DEFENDER_UNITS, Math.floor(capacity / this._bodyCost(unit))));
+        var body = [];
+        for (var index = 0; index < units; index++) body.push(unit[0], unit[1]);
+        return body;
+    }
+
+    static _addDefenseRequest(mission, requests, baseRoom) {
         var defense = mission.defense || {};
         var current = this._getMissionCreeps(mission, 'Defender').filter(creep => !creep.memory.retiring).length;
-        var desired = this._clamp(defense.desiredDefenders, 0, RemoteManager.MAX_DEFENDERS_PER_OUTPOST, 0);
+        var desired = MainUtil.clamp(defense.desiredDefenders, 0, RemoteManager.MAX_DEFENDERS_PER_OUTPOST, 0);
         if (current >= desired) return;
-        var style = defense.preferredStyle || 'melee';
-        var body = style === 'ranged' ? [RANGED_ATTACK, MOVE] : style === 'support' ? [HEAL, MOVE] : [ATTACK, ATTACK, MOVE, MOVE];
+        var body = this.getDefenderBody(defense.preferredStyle, baseRoom);
         requests.push(this._makeRequest(mission, 'Defender', 95, body, {
             targetPos: this._getControllerPos(mission),
         }, 'defense'));
@@ -358,7 +373,7 @@ class RemoteManager {
         var reserved = mission.controller && mission.controller.reservation &&
             mission.controller.reservation.username === this._getOwnUsername(mission);
         var output = this._getSourceOutput(source, reserved);
-        var workParts = this._clamp(Math.ceil(output / HARVEST_POWER), 3, 5, 3);
+        var workParts = MainUtil.clamp(Math.ceil(output / HARVEST_POWER), 3, EconomyManager.getHarvestWorkParts(), 3);
         if (baseRoom && baseRoom.energyCapacityAvailable) {
             var affordableWork = Math.floor((baseRoom.energyCapacityAvailable - BODYPART_COST[CARRY] - BODYPART_COST[MOVE]) / BODYPART_COST[WORK]);
             workParts = Math.max(1, Math.min(workParts, affordableWork));
@@ -369,10 +384,17 @@ class RemoteManager {
         return body;
     }
 
-    static getHaulerBody(mission, baseRoom) {
+    /*
+     * One hauler big enough for the route uses far less CPU than several small ones, and carrying
+     * more than the route produces would waste energy. A chosen haulerPairs still wins.
+     */
+
+    static getHaulerBody(mission, baseRoom, carryNeeded) {
         var homeRoom = baseRoom || mission.homeRoom && Game.rooms[mission.homeRoom];
-        var energyCapacity = homeRoom && homeRoom.energyCapacityAvailable || 300;
-        var configuredPairs = this._clamp(mission.haulerPairs, 1, 6, RemoteManager.DEFAULT_HAULER_PAIRS);
+        var energyCapacity = homeRoom && homeRoom.energyCapacityAvailable || SPAWN_ENERGY_CAPACITY;
+        var wantedPairs = carryNeeded ? Math.ceil(carryNeeded / 2) : RemoteManager.DEFAULT_HAULER_PAIRS;
+        var pairLimit = config.REMOTE.HAULER_PAIRS_MAX;
+        var configuredPairs = mission.haulerPairs ? MainUtil.clamp(mission.haulerPairs, 1, pairLimit, RemoteManager.DEFAULT_HAULER_PAIRS) : MainUtil.clamp(wantedPairs, 1, pairLimit, RemoteManager.DEFAULT_HAULER_PAIRS);
         var pairCost = this._bodyCost([CARRY, CARRY, MOVE]);
         var pairs = Math.max(1, Math.min(configuredPairs, Math.floor(energyCapacity / pairCost)));
         var body = [];
@@ -386,22 +408,28 @@ class RemoteManager {
         var reserved = mission.controller && mission.controller.reservation &&
             mission.controller.reservation.username === this._getOwnUsername(mission);
         var outputPerTick = sources.reduce((sum, source) => {
-            return sum + this._clamp(this._getSourceOutput(source, reserved), 0, 20, 5);
+            return sum + MainUtil.clamp(this._getSourceOutput(source, reserved), 0, 20, 5);
         }, 0);
         var distance = mission.distance === null || mission.distance === undefined ? 1 : mission.distance;
-        var travelTicks = this._clamp(context.travelTicks || mission.travelTicks || distance * 50,
+        var travelTicks = MainUtil.clamp(context.travelTicks || mission.travelTicks || distance * 50,
             20, RemoteManager.MAX_TRAVEL_TICKS, RemoteManager.DEFAULT_TRAVEL_TICKS);
-        var roundTripTicks = this._clamp(travelTicks * 2 + 20, 40, CREEP_LIFE_TIME, 120);
-        var body = context.body || this.getHaulerBody(mission, context.baseRoom);
+        // Miners walk far slower than haulers, so a route is timed by a hauler once one has walked it.
+        // It walks out empty at one tick per tile, and back loaded at half that speed
+        var emptyWalk = context.travelTicks || mission.haulerTravelTicks || 0;
+        var roundTripTicks = emptyWalk > 0
+            ? MainUtil.clamp(emptyWalk * (1 + config.REMOTE.HAULER_TICKS_PER_TILE_LOADED) + 20, 40, CREEP_LIFE_TIME, 120)
+            : MainUtil.clamp(travelTicks * 2 + 20, 40, CREEP_LIFE_TIME, 120);
+        var carryNeeded = Math.ceil(outputPerTick * roundTripTicks / CARRY_CAPACITY);
+        var body = context.body || this.getHaulerBody(mission, context.baseRoom, carryNeeded);
         var carryParts = body.filter(part => part === CARRY).length;
         var capacity = Math.max(CARRY_CAPACITY, carryParts * CARRY_CAPACITY);
         var rawHaulers = outputPerTick > 0 ? Math.ceil(outputPerTick * roundTripTicks / capacity) : 0;
-        var haulers = this._clamp(rawHaulers, 0, mission.maxHaulers, 0);
+        var haulers = MainUtil.clamp(rawHaulers, 0, mission.maxHaulers, 0);
         return {
             miners: sources.length,
             haulers: haulers,
             rawHaulers: rawHaulers,
-            outputPerTick: this._clamp(outputPerTick, 0, 100, 0),
+            outputPerTick: MainUtil.clamp(outputPerTick, 0, 100, 0),
             travelTicks: travelTicks,
             roundTripTicks: roundTripTicks,
             capacity: capacity,
@@ -413,13 +441,13 @@ class RemoteManager {
         var stats = mission.stats || {};
         var net = (stats.energyDelivered || 0) - (stats.energySpent || 0) -
             (stats.repairCost || 0) - (stats.defenseCost || 0);
-        return this._clamp(net, -RemoteManager.MAX_METRIC, RemoteManager.MAX_METRIC, 0);
+        return MainUtil.clamp(net, -RemoteManager.MAX_METRIC, RemoteManager.MAX_METRIC, 0);
     }
 
     static calculateROI(mission) {
         var stats = mission.stats || {};
-        var elapsed = this._clamp(Game.time - (stats.windowStarted || mission.created || 0), 1, 5000, 1);
-        return this._clamp(this.calculateNetROI(mission) / elapsed, -1000, 1000, 0);
+        var elapsed = MainUtil.clamp(Game.time - (stats.windowStarted || mission.created || 0), 1, 5000, 1);
+        return MainUtil.clamp(this.calculateNetROI(mission) / elapsed, -1000, 1000, 0);
     }
 
     static _updateROI(mission, force = false) {
@@ -450,19 +478,27 @@ class RemoteManager {
         mission.stats[key] = this._boundedAdd(mission.stats[key], amount);
     }
 
+    static recordHaulerArrival(missionId, travelTicks) {
+        var mission = this.getMission(missionId);
+        if (!mission || !(travelTicks > 0)) return;
+        var measured = MainUtil.clamp(travelTicks, 1, RemoteManager.MAX_TRAVEL_TICKS, RemoteManager.DEFAULT_TRAVEL_TICKS);
+        // the fastest walk, because a hauler held up by traffic says nothing about the route
+        mission.haulerTravelTicks = mission.haulerTravelTicks ? Math.min(mission.haulerTravelTicks, measured) : measured;
+    }
+
     static recordMinerArrival(missionId, travelTicks, source) {
         var mission = this.getMission(missionId);
         if (!mission) return;
-        mission.travelTicks = this._clamp(Math.max(mission.travelTicks || 0, travelTicks || 0),
+        mission.travelTicks = MainUtil.clamp(Math.max(mission.travelTicks || 0, travelTicks || 0),
             20, RemoteManager.MAX_TRAVEL_TICKS, RemoteManager.DEFAULT_TRAVEL_TICKS);
         var sourceMemory = mission.sources.find(candidate => candidate.id === source.id);
-        if (sourceMemory && source.energyCapacity) sourceMemory.output = this._clamp(source.energyCapacity / 300, 0, 20, 5);
+        if (sourceMemory && source.energyCapacity) sourceMemory.output = MainUtil.clamp(source.energyCapacity / ENERGY_REGEN_TIME, 0, 20, 5);
     }
 
     static suspendMission(missionId, reason, duration = RemoteManager.SUSPENSION_TICKS) {
         var mission = this.getMission(missionId);
         if (!mission) return false;
-        duration = this._clamp(duration, 100, 10000, RemoteManager.SUSPENSION_TICKS);
+        duration = MainUtil.clamp(duration, 100, 10000, RemoteManager.SUSPENSION_TICKS);
         mission.status = 'suspended';
         mission.suspensionReason = reason || 'suspended';
         mission.suspendedUntil = Math.max(mission.suspendedUntil || 0, Game.time + duration);
@@ -473,7 +509,7 @@ class RemoteManager {
     static blacklistMission(missionId, reason, duration = RemoteManager.PLAYER_BLACKLIST_TICKS) {
         var mission = this.getMission(missionId);
         if (!mission) return false;
-        duration = this._clamp(duration, 500, 20000, RemoteManager.PLAYER_BLACKLIST_TICKS);
+        duration = MainUtil.clamp(duration, 500, 20000, RemoteManager.PLAYER_BLACKLIST_TICKS);
         mission.status = 'blacklisted';
         mission.blacklistReason = reason || 'hostile outpost';
         mission.blacklistedAt = Game.time;
@@ -484,7 +520,7 @@ class RemoteManager {
     }
 
     static _planConstruction(mission) {
-        if (!this._isOperational(mission) || mission.maxSites === 0 || mission.defense.threatLevel >= 2) return;
+        if (!this._isOperational(mission) || mission.maxSites === 0 || mission.defense.threatLevel >= config.DEFENSE.DEFENDER_THREAT_LEVEL) return;
         if (Game.time - (mission.lastConstructionPlan || 0) < RemoteManager.CONSTRUCTION_INTERVAL) return;
         var room = Game.rooms[mission.targetRoom];
         if (!room || mission.sources.length === 0) return;
@@ -576,16 +612,9 @@ class RemoteManager {
     }
 
     static _boundedAdd(value, amount) {
-        return this._clamp((Number.isFinite(value) ? value : 0) + amount, 0, RemoteManager.MAX_METRIC, 0);
+        return MainUtil.clamp((Number.isFinite(value) ? value : 0) + amount, 0, RemoteManager.MAX_METRIC, 0);
     }
 
-    static _clamp(value, minimum, maximum, fallback) {
-        value = Number(value);
-        if (value === Infinity) return maximum;
-        if (value === -Infinity) return minimum;
-        if (!Number.isFinite(value)) return fallback;
-        return Math.max(minimum, Math.min(maximum, value));
-    }
 }
 
 RemoteManager.DEFAULT_MAX_DISTANCE = 1;

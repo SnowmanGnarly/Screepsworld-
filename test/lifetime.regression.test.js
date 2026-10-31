@@ -110,6 +110,11 @@ describe('Game object lifetime', function () {
         assert.equal(Game.spawns.Spawn1.store.getUsedCapacity(RESOURCE_ENERGY), 300, 'the new store has the contents');
     });
 
+    it('does not throw on a console command with a wrong link ID', function () {
+        const LinkManager = require('../manager.link');
+        assert.doesNotThrow(() => LinkManager.makeLinkSource('nope'));
+    });
+
     it('reports the running version on request, in step with the package', function () {
         const config = require('../main.config');
         assert.equal(config.VERSION, require('../package.json').version);

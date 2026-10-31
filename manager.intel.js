@@ -37,7 +37,7 @@ class IntelManager {
             try {
                 this.observeRoom(room);
             } catch (error) {
-                info.error('Could not observe room ' + room.name + ': ' + error, room);
+                info.failure('intel:' + room.name, 'Could not observe room ' + room.name, error, room);
             }
         });
     }

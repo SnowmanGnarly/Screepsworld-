@@ -6,7 +6,6 @@ class MineralMiner extends RolePrototype {
 
     constructor() {
         super('MineralMiner', '#888888', '⛏️');
-        this.priority = -1;
         this.defaultMaxNumber = 1;
         this.alwaysDerived = true;
         this._disableAutomaticLoot = true;
@@ -20,10 +19,10 @@ class MineralMiner extends RolePrototype {
         return MineralManager.getDesiredMinerCount(room) > 0;
     }
 
-    spawnCreep(spawn) {
+    spawnCreep(spawn, options = {}) {
         var state = MineralManager.getMiningState(spawn.room);
         if (!MineralManager.canHarvest(state)) return false;
-        var resultingCreep = this._spawnCreepWithParts(spawn, [WORK], [MOVE, CARRY]);
+        var resultingCreep = this._spawnCreepWithParts(spawn, [WORK], [MOVE, CARRY], options);
         if (resultingCreep) {
             resultingCreep.memory.source = state.mineral.id;
             resultingCreep.memory.homeSpawn = spawn.name;

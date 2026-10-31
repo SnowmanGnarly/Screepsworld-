@@ -93,6 +93,9 @@ const constants = {
     },
 };
 
+// the engine's own values win over anything hand-written above
+Object.assign(constants, require('./engine-constants'));
+
 Object.assign(global, constants);
 
 class MockRoomPosition {
@@ -110,8 +113,9 @@ class MockRoomPosition {
         return Math.max(Math.abs(this.x - x), Math.abs(this.y - otherY));
     }
 
-    inRangeTo(target, range) {
-        return this.getRangeTo(target) <= range;
+    // the game takes either (target, range) or (x, y, range)
+    inRangeTo(first, second, third) {
+        return third === undefined ? this.getRangeTo(first) <= second : this.getRangeTo(first, second) <= third;
     }
 
     isNearTo(target) {
@@ -342,11 +346,11 @@ function makeLab(room, options = {}) {
         if (this.cooldown > 0) return ERR_TIRED;
         if (this.pos.getRangeTo(creep) > 1) return ERR_NOT_IN_RANGE;
         const resourceType = this.mineralType;
-        const recipe = resourceType && BOOSTS[resourceType];
-        if (!recipe) return ERR_NOT_ENOUGH_RESOURCES;
+        const boosts = type => Boolean(BOOSTS[type] && BOOSTS[type][resourceType]);
+        if (!resourceType) return ERR_NOT_ENOUGH_RESOURCES;
         const eligible = creep.body.filter(part => {
             const type = typeof part === 'string' ? part : part.type;
-            return recipe[type] && (typeof part === 'string' || !part.boost);
+            return boosts(type) && (typeof part === 'string' || !part.boost);
         });
         const count = bodyPartsCount === undefined ? eligible.length : Math.min(bodyPartsCount, eligible.length);
         if (count <= 0) return ERR_NO_BODYPART;
@@ -357,7 +361,7 @@ function makeLab(room, options = {}) {
         let remaining = count;
         creep.body = creep.body.map(part => {
             const type = typeof part === 'string' ? part : part.type;
-            if (remaining > 0 && recipe[type] && (typeof part === 'string' || !part.boost)) {
+            if (remaining > 0 && boosts(type) && (typeof part === 'string' || !part.boost)) {
                 remaining--;
                 return Object.assign({}, typeof part === 'object' ? part : {}, { type, boost: resourceType });
             }
@@ -632,7 +636,7 @@ function resetScreeps(options = {}) {
     };
     MainCache.initRound([]);
     require('../../main.heap').reset();
-    require('../../main.scheduler').reset();
+    require('../../main.memhack').reset();
     const CpuManager = require('../../manager.cpu');
     CpuManager._degraded = undefined;
     CpuManager._measurements = [];

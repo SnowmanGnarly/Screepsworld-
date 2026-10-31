@@ -11,7 +11,6 @@ class Courier extends RolePrototype {
 
     constructor() {
         super('Courier', '#ff8800', '📯');
-        this.priority = 40;
         this.defaultMaxNumber = 1;
         this.alwaysDerived = true;
         this._disableAutomaticLoot = true;
@@ -26,8 +25,8 @@ class Courier extends RolePrototype {
         return hasLegacyConfig || LogisticsManager.hasEligibleWork(room);
     }
 
-    spawnCreep(spawn) {
-        return this._spawnCreepWithParts(spawn, [WORK, CARRY, MOVE, MOVE]);
+    spawnCreep(spawn, options = {}) {
+        return this._spawnCreepWithParts(spawn, [WORK, CARRY, MOVE, MOVE], [], options);
     }
 
     _work(creep) {

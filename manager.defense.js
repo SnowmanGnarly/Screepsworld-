@@ -25,8 +25,7 @@ class DefenseManager {
         try {
             new DefenseManager(room, options).run();
         } catch (error) {
-            info.error('Could not run defense for ' + room.name + ': ' + error, room);
-            console.log(error.stack);
+            info.failure('defense:' + room.name, 'Could not run defense for ' + room.name, error, room);
         }
     }
 
@@ -133,7 +132,7 @@ class DefenseManager {
     }
 
     _handleAlerts(report) {
-        if (report.level < 2) return;
+        if (report.level < config.DEFENDER_THREAT_LEVEL) return;
         var now = Game.time;
         var last = this._memory.lastNotification;
         if (last && now - last < config.ALERT_INTERVAL) return;
@@ -234,7 +233,7 @@ class DefenseManager {
 
         for (var candidate of candidates) {
             var attackers = towers.filter(tower => {
-                return tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST && tower.pos.getRangeTo(candidate) <= TOWER_FALLOFF_RANGE;
+                return tower.store.getUsedCapacity(RESOURCE_ENERGY) >= TOWER_ENERGY_COST;
             });
             if (attackers.length === 0) continue;
             var damage = attackers.reduce((sum, tower) => sum + this._estimateTowerDamage(tower, candidate), 0);
@@ -274,8 +273,8 @@ class DefenseManager {
     }
 
     static _getHealBoost(part, effect) {
-        var boost = part.boost && BOOSTS[part.boost];
-        return boost && boost.heal && boost.heal[effect] || 1;
+        var boost = part.boost && BOOSTS[HEAL] && BOOSTS[HEAL][part.boost];
+        return boost && boost[effect] || 1;
     }
 }
 

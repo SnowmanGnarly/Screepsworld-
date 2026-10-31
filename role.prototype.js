@@ -38,7 +38,7 @@ class RolePrototype {
 		this.roleName = roleName;
 		this.color = color;
 		this.symbol = symbol;
-		this.priority = 0; // the higher the better
+		this.priority = config.ROLE_PRIORITY[roleName] || 0; // the higher the better
 
 		this._resourceType = RESOURCE_ENERGY;
 		this._reusePath = 5;
@@ -50,8 +50,8 @@ class RolePrototype {
 	 * Creates a single creep for this role.
 	 */
 
-	spawnCreep(spawn) {
-		return this._spawnCreepWithParts(spawn, [WORK, CARRY, MOVE, MOVE]);
+	spawnCreep(spawn, options = {}) {
+		return this._spawnCreepWithParts(spawn, [WORK, CARRY, MOVE, MOVE], [], options);
 	}
 
 	/*
@@ -76,13 +76,13 @@ class RolePrototype {
 		return creep.ticksToLive <= creep.body.length * CREEP_SPAWN_TIME + config.SPAWN.PRESPAWN_MARGIN;
 	}
 
-	spawnMissionCreep(spawn, request) {
+	spawnMissionCreep(spawn, request, options = {}) {
 		var body = request && (request.exactBody || request.body);
 		var memory = Object.assign({}, request && request.memory, {
 			role: request && request.role || this.roleName,
 			home: request && request.home || spawn.memory.home,
 		});
-		return this._spawnCreepWithBody(spawn, body, memory);
+		return this._spawnCreepWithBody(spawn, body, memory, options);
 	}
 
 	/*
@@ -301,17 +301,14 @@ class RolePrototype {
 		if (creep.memory.source) {
 			// creep has specific source in mind
 			specificSource = Game.getObjectById(creep.memory.source);
-			if (specificSource && this._sourceMode == RolePrototype.SOURCE_MODE_USE_OR_WAIT) {
+			if (specificSource && this._sourceMode == RolePrototype.SOURCE_MODE_USE_OR_WAIT && !this._isLeftToHaulers(specificSource)) {
 				// only in TARGET_MODE_USE_OR_WAIT we don't care for the validity of the source
 				return specificSource;
 			}
 			if (!specificSource) {
-				info.error(MainUtil.getDisplayName(creep) + ' could not find source: ' + creep.memory.source);
-
-				if (this._sourceMode != RolePrototype.SOURCE_MODE_USE_IF_VALID) {
-					// only in SOURCE_MODE_USE_IF_VALID can we recover from that error
-					return null;
-				}
+				// a destroyed store is not coming back, so waiting for it would freeze this creep for good
+				info.log(MainUtil.getDisplayName(creep) + ' lost its source and is looking for another', this._baseRoom);
+				creep.memory.source = null;
 			}
 		}
 		var sources = this._findSources(this._baseRoom);
@@ -346,6 +343,12 @@ class RolePrototype {
 		return null;
 	}
 
+	// a worker remembers its source until it runs dry, which is no reason to keep draining a hauler's container
+	_isLeftToHaulers(store) {
+		if (!this._baseRoom || !EconomyManager.isSourceContainer(this._baseRoom, store)) return false;
+		return !this._findSources(this._baseRoom).some(source => source.id === store.id);
+	}
+
 	/*
 	 * Sorts the sources so the closest is first. If there are other things to
 	 * take into consideration, this function is overriden.
@@ -377,6 +380,7 @@ class RolePrototype {
 				(structure.structureType == STRUCTURE_LINK && MainUtil.fetchMemoryOfStructure(structure).type == constants.LINK_TYPE_TARGET)) &&
 				structure.store.getUsedCapacity(this._resourceType) > 0;
 		}) : [];
+		if (this._resourceType === RESOURCE_ENERGY) storages = EconomyManager.withoutSourceContainers(room, storages);
 
 		return storages.concat(this._findActiveSources(room));
 	}
@@ -446,7 +450,6 @@ class RolePrototype {
 	 */
 
 	run(creep, baseRoom = RolePrototype._fetchBaseRoomForCreep(creep), sourcePolicy = {}) {
-		this._creep = creep;
 		this._baseRoom = baseRoom;
 
 		// we want to keep track when a creep is actually moving
@@ -503,7 +506,7 @@ class RolePrototype {
 
 	_lootNearby(creep) {
 		var claimedPickups = LogisticsManager.getClaims(creep.room).pickups;
-		var isNearby = object => !claimedPickups.has(object.id) && creep.pos.inRangeTo(object, 3);
+		var isNearby = object => !claimedPickups.has(object.id) && creep.pos.inRangeTo(object, config.ECONOMY.LOOT_RANGE);
 
 		var droppedResources = MainCache.find(creep.room, FIND_DROPPED_RESOURCES)
 			.filter(e => e.amount > 0 && isNearby(e) && e.resourceType == this._resourceType)
@@ -640,10 +643,21 @@ class RolePrototype {
 		if (!body) {
 			return false;
 		}
-		var memory = {
-			role: this.roleName,
-			home: spawn.memory.home,
-		};
+		return this._spawnBody(spawn, body, { role: this.roleName, home: spawn.memory.home }, options);
+	}
+
+	_spawnCreepWithBody(spawn, body, memory, options = {}) {
+		if (!Array.isArray(body) || body.length === 0 || body.length > MAX_CREEP_SIZE) return false;
+		var cost = this._calculateCostsForParts(body);
+		if (!Number.isFinite(cost)) return false;
+		if (cost > spawn.room.energyAvailable) {
+			if (cost <= spawn.room.energyCapacityAvailable && this._shouldWaitForEnergy(options)) options.waitingForEnergy = true;
+			return false;
+		}
+		return this._spawnBody(spawn, body.slice(), memory, options);
+	}
+
+	_spawnBody(spawn, body, memory, options) {
 		var boostDecision = LabManager.planSpawnBoost(spawn, body, this.roleName, memory, options);
 		if (!boostDecision.allow) return false;
 		var newName = this._createCreepName(spawn);
@@ -659,34 +673,6 @@ class RolePrototype {
 			if (spawn.memory.debug) {
 				info.log(message, spawn.room);
 			}
-		} else {
-			info.error(message, spawn.room);
-		}
-		return false;
-	}
-
-	_spawnCreepWithBody(spawn, body, memory) {
-		if (!Array.isArray(body) || body.length === 0 || body.length > MAX_CREEP_SIZE) return false;
-		var cost = this._calculateCostsForParts(body);
-		if (!Number.isFinite(cost)) return false;
-		if (cost > spawn.room.energyAvailable) {
-			if (cost <= spawn.room.energyCapacityAvailable) this._waitingForEnergy = this._shouldWaitForEnergy(spawn);
-			return false;
-		}
-		body = body.slice();
-		var boostDecision = LabManager.planSpawnBoost(spawn, body, this.roleName, memory);
-		if (!boostDecision.allow) return false;
-		var newName = this._createCreepName(spawn);
-		var spawnResult = spawn.spawnCreep(body, newName, { memory: memory });
-		if (spawnResult == OK) {
-			var resultingCreep = Game.creeps[newName];
-			if (boostDecision.plan) LabManager.registerSpawnBoost(resultingCreep, boostDecision.plan);
-			MainCache.recordSpawn(resultingCreep, spawn);
-			return resultingCreep;
-		}
-		var message = 'Could not spawn ' + this.roleName + ' ' + newName + ' (' + body.length + ' parts, ' + cost + ' energy): ' + spawnResult;
-		if (spawnResult == ERR_NOT_ENOUGH_ENERGY || spawnResult == ERR_BUSY) {
-			if (spawn.memory.debug) info.log(message, spawn.room);
 		} else {
 			info.error(message, spawn.room);
 		}
@@ -736,8 +722,8 @@ class RolePrototype {
 		if (minMultiplier > maxMultiplier || maxMultiplier < 1) {
 			return null;
 		}
-		if (this._fullSizeCost(spawn, costs, singleCosts, minMultiplier, maxMultiplier) > spawn.room.energyAvailable && this._shouldWaitForEnergy(spawn)) {
-			this._waitingForEnergy = true;
+		if (this._fullSizeCost(spawn, costs, singleCosts, minMultiplier, maxMultiplier) > spawn.room.energyAvailable && this._shouldWaitForEnergy(options)) {
+			options.waitingForEnergy = true;
 			return null;
 		}
 		if (minMultiplier * costs + singleCosts > spawn.room.energyAvailable) {
@@ -771,11 +757,11 @@ class RolePrototype {
 	 * as recovery and console commands, spawns with what is there right now.
 	 */
 
-	_shouldWaitForEnergy(spawn) {
-		if (!this._mayWaitForEnergy) return false;
+	_shouldWaitForEnergy(options) {
+		if (!options.mayWait) return false;
 		var waits = MainHeap.namespace('spawnWait');
-		if (!waits[this._spawnBaseName]) waits[this._spawnBaseName] = Game.time;
-		return Game.time - waits[this._spawnBaseName] < config.SPAWN.MAX_WAIT_TICKS;
+		if (!waits[options.baseName]) waits[options.baseName] = Game.time;
+		return Game.time - waits[options.baseName] < config.SPAWN.MAX_WAIT_TICKS;
 	}
 
 	/*
@@ -808,18 +794,6 @@ class RolePrototype {
 
 	_getUsefulBodyUnits(room) {
 		return config.BODY.DEFAULT_UNITS;
-	}
-
-	/*
-	 * The quota that counts for this room. Roles override this when a stored quota can be a default
-	 * rather than what the operator asked for.
-	 *
-	 * @param {Room} room
-	 * @param manual the stored quota
-	 */
-
-	getManualQuota(room, manual) {
-		return manual;
 	}
 
 	/*

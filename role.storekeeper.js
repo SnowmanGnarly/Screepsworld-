@@ -11,7 +11,6 @@ class StoreKeeper extends RolePrototype {
 
     constructor() {
         super('Storekeeper', '#ff9900', '🏭');
-        this.priority = 75;
         this.movesEnergy = true;
         this.alwaysDerived = true; // limited by maxNumber, never switched off with the other roles
         this._disableAutomaticLoot = true;
@@ -25,8 +24,8 @@ class StoreKeeper extends RolePrototype {
         return LogisticsManager.hasEligibleWork(room, { resourceType: RESOURCE_ENERGY });
     }
 
-    spawnCreep(spawn) {
-        return this._spawnCreepWithParts(spawn, [MOVE, CARRY]);
+    spawnCreep(spawn, options = {}) {
+        return this._spawnCreepWithParts(spawn, [MOVE, CARRY], [], options);
     }
 
     _getUsefulBodyUnits(room) {

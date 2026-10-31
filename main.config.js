@@ -11,16 +11,24 @@ const SETTING_DEFAULTS = {
 };
 
 module.exports = {
-	VERSION: '1.9.0', // keep in step with package.json; version() shows what the shard is running
+	VERSION: '1.10.0', // keep in step with package.json; version() shows what the shard is running
+
+	ROLE_PRIORITY: { // spawn order, the higher the sooner. Local roles all come before mission creeps
+		Harvester: 100, Defender: 90, Miner: 85, Storekeeper: 75, Builder: 70, Upgrader: 50, Courier: 40,
+		MineralMiner: -1, RemoteHauler: -5, RemoteMiner: -10, Reserver: -15, Scout: -20,
+	},
 
 	CPU: {
 		CRITICAL_BUCKET: 200, // below this only defense, logistics, spawning and creeps run
-		DEGRADED_BUCKET: 1000, // below this deferred work stops
+		DEGRADED_BUCKET: 1000, // below this only that, intel, remote safety and boost upkeep run
 		RECOVERED_BUCKET: 1500, // above this deferred work resumes
 		STATS_INTERVAL: 10, // ticks averaged into one stats sample
 		STATS_SAMPLES: 60, // samples kept in Memory.stats
 		STATS_TOP_JOBS: 5, // jobs stored per sample, most expensive first
 		ERROR_LOG_INTERVAL: 50, // ticks between repeated reports of one failing job
+		NOTIFY_INTERVAL: 1000, // ticks between emails about one problem
+		NOTIFY_GROUP_MINUTES: 60, // the game bundles emails that arrive within this time
+		TICK_MARGIN: 0.1, // share of the tick's CPU limit kept free, so the tick always finishes
 	},
 
 	SPAWN: {
@@ -38,11 +46,20 @@ module.exports = {
 		PATH_FACTOR: 1.3, // straight-line range to estimated path length, when no path can be measured
 		ROUTE_TTL: 5000, // ticks before a measured route length is measured again
 		UPGRADER_MAX: 5, // upper bound on derived Upgraders per room
-		UPGRADER_STORAGE_FLOOR: 100000, // stored energy kept before adding Upgraders
-		UPGRADER_STORAGE_STEP: 100000, // stored energy that pays for one more Upgrader
+		UPGRADER_STORAGE_FLOOR: 30000, // stored energy kept for emergencies before upgrading at full rate
+		UPGRADER_STORAGE_STEP: 100000, // stored energy above the floor that pays for one more Upgrader
+		UPGRADER_CONTAINER_FLOOR: 1000, // energy in containers before adding Upgraders, while there is no storage
+		UPGRADE_INCOME_SHARE: 0.6, // share of mined income spent on the controller; the rest pays for creeps
 		BUILDER_MAX: 3, // upper bound on derived Builders per room
-		BUILDER_PROGRESS_STEP: 15000, // remaining build progress that justifies one more Builder
+		BUILDER_PROGRESS_STEP: 5000, // remaining build progress that justifies one more Builder
+		HARVESTERS_PER_SOURCE_MAX: 3, // more than this crowd a source for little extra energy
 		SOURCE_DROP_RANGE: 2, // range at which a container or link counts as serving a source
+		WORKER_STORE_MIN: 1000, // energy elsewhere in the room before workers leave source containers to the haulers
+		HUB_LINK_RANGE: 2, // range at which a receiving link counts as beside the storage
+		MINER_WALK_RANGE: 7, // how far a Miner with no drop-off beside it walks to a store
+		REPAIR_RATIO: 0.95, // a Handyman repairs roads and containers below this share of their hits
+		REPAIR_DEMAND_RATIO: 0.5, // and a Handyman is only worth spawning once they fall below this
+		LOOT_RANGE: 3, // how far a creep in a room with no haulers goes for loot
 		SPENDING_SHARE: 0.5, // share of source income one Upgrader or Handyman may spend per tick
 		HAULER_MIN_CARRY: 5, // CARRY parts on a Storekeeper before distance asks for more
 	},
@@ -68,12 +85,17 @@ module.exports = {
 		MAX_LOCAL_DEFENDERS: 2,
 		SECOND_DEFENDER_SCORE: 600,
 		DEFENDER_THREAT_LEVEL: 2, // threat level at which Defenders are called for
+		WALL_REPAIR_BASE_HITS: 10000, // a Handyman's wall target at RCL 1, doubling with each level
+		WALL_REPAIR_MAX_HITS: 1000000,
+		WALL_REPAIR_THREAT_MULTIPLIER: 5,
+		TOWER_ENERGY_RESERVE: 200, // energy towers keep for attacking when they heal or repair
+		TOWER_EMERGENCY_REPAIR_RATIO: 0.25,
 	},
 
 	LOGISTICS: {
 		PRIORITY: {
 			CORE: 100, TOWER_UNDER_ATTACK: 95, SALVAGE: 85, DROPPED: 80, LEGACY_ROUTE: 80, CONTAINER: 75,
-			LAB_BOOST: 72, HUB_LINK: 70, LAB_OUTPUT: 65, LAB_ENERGY: 65, TOWER: 60, LAB_INPUT: 60,
+			LAB_BOOST: 72, HUB_LINK: 70, LAB_OUTPUT: 65, LAB_ENERGY: 65, TOWER: 60, LAB_INPUT: 60, FACTORY: 60, STOCK_POLICY: 30,
 		},
 		TOWER_REFILL_FREE: 200, // tower capacity free before a refill is requested
 		LAB_REFILL_FREE: 400,
@@ -81,6 +103,14 @@ module.exports = {
 		CONTAINER_COLLECT_MIN: 400,
 		DROPPED_COLLECT_MIN: 100,
 		RETRY_TICKS: 5,
+		LINK_COLLECT_MIN: 200, // energy in the storage-side link worth a hauler's trip
+		CLAIM_TIMEOUT: 150, // ticks a hauler may hold a task without moving any cargo
+	},
+
+	REMOTE: {
+		DEFENDER_UNITS: 8, // body repeats on an outpost defender, within what the room can pay for
+		HAULER_PAIRS_MAX: 16, // CARRY, CARRY, MOVE repeats on the largest hauler, the 50 part limit
+		HAULER_TICKS_PER_TILE_LOADED: 2, // one MOVE per two CARRY moves every second tick when full
 	},
 
 	HEAP: {
@@ -101,9 +131,27 @@ module.exports = {
 		PRELOAD_TTL: 500, // ticks without a spawn attempt before a pre-loaded lab is released; a role may be saving energy
 	},
 
+	DIRECTOR: {
+		EVALUATE_INTERVAL: 50, // ticks between a room's looks at its economic goal; rooms take different ticks
+		MISSION_INTERVAL: 10, // ticks between checks on whether a room's missions have finished
+		DEFENSE_CLEAR_TICKS: 20, // ticks without a dangerous hostile before a room stands down
+		STOCKPILE_ENTER: { 4: 20000, 5: 50000, 6: 100000, 7: 150000, 8: 200000 }, // stored energy below which a room saves up, by RCL
+		STOCKPILE_EXIT_MARGIN: 50000, // saved above the entry level before a room spends again, so it does not flip-flop
+		EXPAND_MIN_ENERGY: 300000, // stored energy a room must have to pay for a new one
+		EXPAND_BUCKET: 9000, // a new room costs CPU for good, so only a full bucket may start one
+		TOWER_PRIORITY: 120, // logistics priority for towers under GOAL_DEFENSE, above everything else
+		LAB_BOOST_PRIORITY: 110, // logistics priority for loading labs during a MISSION_BOOST_QUEUE
+		BOOST_LOAD_AMOUNT: 900, // compound loaded per lab: 30 boosted parts
+		BOOST_LOAD_MIN: 30, // stock below this cannot boost one part, so a mission is not worth starting
+		MISSION_RETRY: 1000, // ticks before a mission that timed out may start again
+	},
+
 	MEMORY: {
+		MEASURE_INTERVAL: 100, // ticks between readings of the serialized memory size
 		ROOM_PRUNE_INTERVAL: 1000, // ticks between cleanups of memory for rooms we no longer use
+		ROOM_PRUNE_PHASE: 533, // keeps the cleanups off the ticks that other periodic work runs on
 		STUCK_PRUNE_INTERVAL: 100, // ticks between cleanups of heap state for dead creeps
+		STUCK_PRUNE_PHASE: 50,
 	},
 
 	MOVEMENT: {
@@ -115,6 +163,8 @@ module.exports = {
 	},
 
 	PLANNER: {
+		MAX_RCL: 8,
+		INTERVAL: 10, // ticks between a room's Mayor runs; rooms take different ticks
 		MAX_OPEN_SITES: 2, // open non-road construction sites per room
 		SOURCE_CONTAINER_RCL: 3, // the first level whose capacity pays for a full-size Miner
 		RAMPART_RCL: 4, // the first level with a storage to pay for keeping a wall repaired

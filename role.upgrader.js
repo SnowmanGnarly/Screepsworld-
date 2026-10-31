@@ -13,7 +13,6 @@ class Upgrader extends RolePrototype {
 
     constructor() {
         super('Upgrader', '#00ff00', '⚡');
-        this.priority = 50;
     }
 
     getDemand(room) {
@@ -46,13 +45,24 @@ class Upgrader extends RolePrototype {
             }
         }) : [];
         if (storedEnergy.length > 0 || !this._useSourceAsSource) {
-            return storedEnergy;
+            return EconomyManager.withoutSourceContainers(room, storedEnergy);
         }
         return this._findActiveSources(room);
     }
 
     _findTargets(room) {
         return room.controller && room.controller.my ? [room.controller] : [];
+    }
+
+    /*
+     * An Upgrader spends its life at the controller, so what counts is how far the energy is from
+     * there. That is what makes a controller link pay off.
+     */
+
+    _sortSourceForClosest(sources, creep) {
+        var controller = this._baseRoom && this._baseRoom.controller;
+        if (!controller) return super._sortSourceForClosest(sources, creep);
+        return sources.sort((a, b) => a.pos.getRangeTo(controller) - b.pos.getRangeTo(controller));
     }
 }
 

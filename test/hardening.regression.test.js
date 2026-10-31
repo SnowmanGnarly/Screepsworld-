@@ -242,7 +242,8 @@ describe('Hardening regressions', function () {
             remote.travelTicks = 50;
             remote.sources = [{ id: 's1', output: 10 }, { id: 's2', output: 10 }];
             const demand = RemoteManager.calculateRouteDemand(remote, { baseRoom: room });
-            assert.equal(demand.haulers, 6);
+            assert.ok(demand.haulers * demand.capacity >= 20 * demand.roundTripTicks, 'carries what the route produces');
+            assert.ok(demand.haulers <= 6, 'with no more creeps than the old small bodies needed');
         });
 
         it('raises a stored legacy hauler cap once and then respects explicit values', function () {
@@ -366,24 +367,13 @@ describe('Hardening regressions', function () {
             });
         });
 
-        it('keeps factories and labs running in degraded mode', function () {
+        it('runs only life-support and defense in degraded mode', function () {
             stubManagers();
             Game.cpu.bucket = 800;
             main.loop();
-            ['FactoryManager', 'LabManager', 'TerminalManager'].forEach(name => assert.ok(calls.includes(name), name));
-            ['MayorManager', 'RoadManager'].forEach(name => assert.ok(!calls.includes(name), name));
-        });
-
-        it('runs the Mayor on its first tick and then at its own cadence', function () {
-            stubManagers();
-            const runs = [];
-            for (let tick = 0; tick < 21; tick++) {
-                calls.length = 0;
-                main.loop();
-                if (calls.includes('MayorManager')) runs.push(Game.time);
-                Game.time++;
-            }
-            assert.deepEqual(runs, [1, 11, 21]);
+            ['MemoryManager', 'DefenseManager', 'TowerManager', 'LinkManager', 'LogisticsManager', 'BaseManager', 'IntelManager', 'RemoteManager', 'LabManager']
+                .forEach(name => assert.ok(calls.includes(name), name));
+            ['FactoryManager', 'TerminalManager', 'MarketManager', 'MayorManager', 'RoadManager'].forEach(name => assert.ok(!calls.includes(name), name));
         });
 
         it('only draws room overlays while the visuals setting is on', function () {

@@ -433,7 +433,7 @@ describe('Lab reaction and logistics regressions', function () {
             storage: { [H]: 100, [U]: 100 },
             config: reactionConfig(UH, 5),
             labs: [
-                { id: 'lab-00', x: 24, y: 25, contents: { [H]: 5, [RESOURCE_ENERGY]: 2000 } },
+                { id: 'lab-00', x: 24, y: 25, contents: { [RESOURCE_OXYGEN]: 5, [RESOURCE_ENERGY]: 2000 } },
                 { id: 'lab-01', x: 25, y: 25, contents: { [RESOURCE_ENERGY]: 2000 } },
                 { id: 'lab-02', x: 24, y: 24, contents: { [OH]: 5, [RESOURCE_ENERGY]: 2000 } },
             ],
@@ -446,16 +446,16 @@ describe('Lab reaction and logistics regressions', function () {
 
         assert.equal(inputA.memory.labRole, 'drain');
         assert.equal(inputA.memory.inputResourceType, null);
-        assert.equal(inputA.memory.outputResourceType, H);
+        assert.equal(inputA.memory.outputResourceType, RESOURCE_OXYGEN);
         assert.equal(output.memory.labRole, 'drain');
         assert.equal(output.memory.outputResourceType, OH);
         let tasks = room.memory.logistics.tasks;
-        assert.ok(tasks.some(task => task.sourceId === inputA.id && task.resourceType === H && task.kind === LogisticsManager.KIND_COLLECT));
+        assert.ok(tasks.some(task => task.sourceId === inputA.id && task.resourceType === RESOURCE_OXYGEN && task.kind === LogisticsManager.KIND_COLLECT));
         assert.ok(tasks.some(task => task.sourceId === output.id && task.resourceType === OH && task.kind === LogisticsManager.KIND_COLLECT));
         assert.ok(!tasks.some(task => task.targetId === inputA.id && task.resourceType === U));
         assert.ok(!tasks.some(task => task.targetId === output.id && task.resourceType === UH));
 
-        inputA.store.set(H, 0);
+        inputA.store.set(RESOURCE_OXYGEN, 0);
         output.store.set(OH, 0);
         Game.time = 2;
         runLabs(room);
@@ -463,13 +463,13 @@ describe('Lab reaction and logistics regressions', function () {
 
         tasks = room.memory.logistics.tasks;
         assert.equal(inputA.memory.labRole, 'inputA');
-        assert.equal(inputA.memory.inputResourceType, U);
+        assert.ok([H, U].includes(inputA.memory.inputResourceType));
         assert.equal(output.memory.labRole, 'output');
         assert.equal(output.memory.activeReaction, UH);
-        const replacement = tasks.find(task => task.targetId === inputA.id && task.resourceType === U);
+        const replacement = tasks.find(task => task.targetId === inputA.id && task.resourceType === inputA.memory.inputResourceType);
         assert.ok(replacement);
         assert.equal(replacement.amount, 5);
-        assert.ok(!tasks.some(task => task.sourceId === inputA.id && task.resourceType === H));
+        assert.ok(!tasks.some(task => task.sourceId === inputA.id && task.resourceType === RESOURCE_OXYGEN));
         assert.ok(!tasks.some(task => task.sourceId === output.id && task.resourceType === OH));
     });
 

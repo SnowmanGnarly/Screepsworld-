@@ -5,7 +5,6 @@ class Reserver extends RolePrototype {
 
     constructor() {
         super('Reserver', '#cc99ff', '🔐');
-        this.priority = -15;
         this._disableAutomaticLoot = true;
     }
 

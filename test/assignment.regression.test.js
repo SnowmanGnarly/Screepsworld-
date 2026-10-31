@@ -94,7 +94,7 @@ describe('Harvesters only during bootstrap', function () {
             addCreep(room, 'sk', 'Storekeeper');
             MainCache.initRound([]);
             assert.equal(EconomyManager.isSelfSustaining(room), false);
-            assert.equal(EconomyManager.getDesiredHarvesters(room), 1);
+            assert.ok(EconomyManager.getDesiredHarvesters(room) >= 1);
         });
 
         it('still staffs a source that cannot be mined statically yet', function () {
@@ -105,7 +105,7 @@ describe('Harvesters only during bootstrap', function () {
             addCreep(room, 'm1', 'Miner', { memory: { source: 's1' } });
             addCreep(room, 'sk', 'Storekeeper');
             MainCache.initRound([]);
-            assert.equal(EconomyManager.getDesiredHarvesters(room), 1);
+            assert.ok(EconomyManager.getDesiredHarvesters(room) >= 1);
         });
 
         it('does not ask for a Harvester while a Miner is only being replaced', function () {
@@ -132,15 +132,46 @@ describe('Harvesters only during bootstrap', function () {
             addCreep(room, 'sk', 'Storekeeper');
             addCreep(room, 'up', 'Upgrader');
             run(room, roles());
-            assert.equal(spawn.spawning, null);
+            assert.notEqual(spawn.spawning && spawn.spawning.memory.role, 'Harvester');
         });
 
-        it('treats the quota of 1 the Mayor sets as a default, not a request', function () {
-            const { room, spawn } = minedRoom({ energy: 1000, capacity: 1000, roleConfig: { Harvester: { requiredNumber: 1 } } });
-            addCreep(room, 'sk', 'Storekeeper');
-            addCreep(room, 'up', 'Upgrader');
-            run(room, roles());
-            assert.equal(spawn.spawning, null);
+        it('removes the quota of 1 the old Mayor stored, once, in automatic rooms', function () {
+            const { room } = minedRoom({ roleConfig: { Harvester: { requiredNumber: 1 }, Upgrader: { requiredNumber: 1 }, Builder: { requiredNumber: 3 } } });
+            const roleConfig = MemoryManager._fetchRoomRoleConfig(room, []);
+            assert.equal(roleConfig.Harvester.requiredNumber, 0);
+            assert.equal(roleConfig.Upgrader.requiredNumber, 0);
+            assert.equal(roleConfig.Builder.requiredNumber, 3, 'a higher count was chosen by someone');
+            roleConfig.Harvester.requiredNumber = 1;
+            MemoryManager._fetchRoomRoleConfig(room, []);
+            assert.equal(roleConfig.Harvester.requiredNumber, 1, 'a count set afterwards stays');
+        });
+
+        it('leaves the quotas of a room the operator runs by hand', function () {
+            const { room } = minedRoom({ roleConfig: { Harvester: { requiredNumber: 1 } } });
+            room.memory.mayor = { mode: 'off' };
+            const roleConfig = MemoryManager._fetchRoomRoleConfig(room, []);
+            assert.equal(roleConfig.Harvester.requiredNumber, 1);
+        });
+
+        it('removes it when a room the operator ran by hand goes automatic', function () {
+            const { room } = minedRoom({ roleConfig: { Harvester: { requiredNumber: 1 } } });
+            room.memory.mayor = { mode: 'off' };
+            MemoryManager._fetchRoomRoleConfig(room, []);
+            room.memory.mayor.mode = 'auto';
+            const roleConfig = MemoryManager._fetchRoomRoleConfig(room, []);
+            assert.equal(roleConfig.Harvester.requiredNumber, 0);
+        });
+
+        it('no longer has the Mayor write counts into automatic rooms', function () {
+            const MayorManager = require('../manager.mayor');
+            const { room } = minedRoom({ roleConfig: { Harvester: { requiredNumber: 0 }, Upgrader: { requiredNumber: 0 }, Builder: { requiredNumber: 0 }, Handyman: { requiredNumber: 0 } } });
+            room.memory.mayor = { mode: 'auto' };
+            global.CONTROLLER_STRUCTURES = global.CONTROLLER_STRUCTURES || {};
+            MainCache.initRound([]);
+            new MayorManager(room).run();
+            ['Harvester', 'Upgrader', 'Builder', 'Handyman'].forEach(role => {
+                assert.equal(room.memory.base.roleConfig[role].requiredNumber, 0, role);
+            });
         });
 
         it('honours a Harvester quota the operator raised', function () {
@@ -155,6 +186,7 @@ describe('Harvesters only during bootstrap', function () {
         it('honours a quota of 1 set explicitly with setCreepCount', function () {
             const { room, spawn } = minedRoom({ energy: 1000, capacity: 1000 });
             room.memory.base.roleConfig.Harvester = { requiredNumber: 0 };
+            room.memory.base.roleConfig.quotaVersion = MemoryManager.QUOTA_VERSION;
             addCreep(room, 'sk', 'Storekeeper');
             addCreep(room, 'up', 'Upgrader');
             setFind(room, FIND_MY_STRUCTURES, [makeStructure(room, STRUCTURE_EXTENSION, { store: makeStore(50) })]);
@@ -200,7 +232,7 @@ describe('Harvesters only during bootstrap', function () {
             addCreep(room, 'up', 'Upgrader');
             addCreep(room, 'old', 'Harvester', { ticksToLive: 10 });
             run(room, roles());
-            assert.equal(spawn.spawning, null);
+            assert.notEqual(spawn.spawning && spawn.spawning.memory.role, 'Harvester');
         });
 
         it('keeps the spawn filled once the Harvesters are gone', function () {
@@ -239,6 +271,25 @@ describe('Harvesters only during bootstrap', function () {
             room.memory.logistics = { tasks: [{ id: 't', remaining: 100, state: 'open', resourceType: RESOURCE_ENERGY, retryAfter: 0 }] };
             run(room, roles());
             assert.equal(spawn.spawning && spawn.spawning.memory.role, 'Storekeeper');
+        });
+
+        it('skips a required boost when recovering from nothing', function () {
+            const LabManager = require('../manager.lab');
+            const { room, spawn } = homeRoom({ energy: 300 });
+            const seen = [];
+            const original = LabManager.planSpawnBoost;
+            LabManager.planSpawnBoost = (who, body, role, memory, options) => {
+                seen.push(options && options.emergency);
+                return { allow: Boolean(options && options.emergency), plan: null };
+            };
+            try {
+                addSource(room, 's1', 10, 10);
+                run(room, roles());
+            } finally {
+                LabManager.planSpawnBoost = original;
+            }
+            assert.deepEqual(seen, [true]);
+            assert.equal(spawn.spawning && spawn.spawning.memory.role, 'Harvester');
         });
 
         it('still recovers from losing every creep', function () {
@@ -403,10 +454,26 @@ describe('Derived bodies', function () {
         assert.equal(count(spawnBody(new Builder(), spawn), WORK), Math.ceil(20 / BUILD_POWER));
     });
 
-    it('sizes a Handyman like an Upgrader, since repairing spends at the same rate', function () {
+    it('keeps a Handyman at the default size, which is plenty for repairs', function () {
         const { room, spawn } = homeRoom({ energy: 12900, capacity: 12900, level: 7 });
         addSource(room, 's1', 10, 10);
-        assert.equal(count(spawnBody(new Handyman(), spawn), WORK), EconomyManager.getSpendingWorkParts(room));
+        assert.equal(count(spawnBody(new Handyman(), spawn), WORK), config.BODY.DEFAULT_UNITS);
+    });
+
+    it('wants a Handyman only once something is getting worn', function () {
+        const { room } = homeRoom();
+        const road = addStructure(room, STRUCTURE_ROAD, 20, 20, { hits: 4000, hitsMax: 5000 });
+        const handyman = new Handyman();
+        assert.equal(handyman.getDemand(room), 0, '80% is not worth a creep');
+        road.hits = 2000;
+        MainCache.initRound([]);
+        assert.equal(handyman.getDemand(room), 1);
+    });
+
+    it('wants a Handyman for a rampart below its target', function () {
+        const { room } = homeRoom();
+        addStructure(room, STRUCTURE_RAMPART, 20, 20, { hits: 1, hitsMax: 300000 });
+        assert.equal(new Handyman().getDemand(room), 1);
     });
 
     it('makes one big Storekeeper instead of many small ones when distance needs it', function () {

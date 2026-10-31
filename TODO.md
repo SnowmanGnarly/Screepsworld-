@@ -41,12 +41,12 @@
   ```
 - [x] Auto-generate high-priority delivery requests:
   - [x] Spawn & Extension refills (`priority: 100`)
-  - [x] Towers under invasion or below 500 energy (`priority: 90 - 95`)
+  - [x] Towers under invasion (`priority: 95`) or with 200 energy free (`priority: 60`)
   - [x] Labs needing energy or reaction reagents (`priority: 60 - 70`)
 - [x] Auto-generate supply collection requests:
   - [x] Dropped resource piles $> 100$ amount (`priority: 80`)
   - [x] Source containers $> 400$ energy (`priority: 75`)
-  - [x] Full mineral containers, factory output, or lab products (`priority: 65`)
+  - [x] Full mineral containers (`priority: 75`), lab products (`priority: 65`), factory output (`priority: 60`)
 - [x] Migrate `role.courier.js` to handle any resource type dynamically from `LogisticsManager`.
 - [x] Migrate `role.storekeeper.js` to execute prioritized energy logistics tasks.
 - [ ] Implement multi-room hauler dispatching when storage holds $> 100,000$ surplus energy.
@@ -68,7 +68,7 @@
   - [x] Place `STRUCTURE_TERMINAL` adjacent to storage.
   - [x] Cluster `STRUCTURE_LAB` within reaction range ($\le 2$ tiles).
   - [x] Position `STRUCTURE_LINK` adjacent to sources, controller, and storage.
-- [ ] Add dynamic distance transform matrix to optimize bunker layouts.
+- [x] Add dynamic distance transform matrix to optimize bunker layouts.
 
 ---
 
@@ -87,12 +87,12 @@
 
 ### 4. Remote Mining & Controller Reservation
 - [x] Create `role.scout.js` for lightweight room scouting and intel gathering.
-- [x] Create `role.reserver.js` with `[CLAIM, MOVE]` parts to reserve neutral rooms (restoring source output to 3000 energy / 300 ticks).
+- [x] Create `role.reserver.js` with `[CLAIM, CLAIM, MOVE, MOVE]` parts, or `[CLAIM, MOVE]` below 1300 capacity, to reserve neutral rooms (restoring source output to 3000 energy / 300 ticks).
 - [x] Create `role.remoteMiner.js` with mission-sized bodies for mining near remote source containers.
 - [x] Create `role.remoteHauler.js` with demand-sized bodies for routes between remote containers and home storage.
 - [x] Implement `manager.remote.js` to compute bounded Net ROI:
   $$\Delta E = E_{\text{harvested}} - (E_{\text{miner}} + E_{\text{hauler}} + E_{\text{reserver}} + E_{\text{repairs}} + E_{\text{defense}})$$
-  Automatically suspend or blacklist rooms with sustained losses, active invader cores, or player harassment.
+  Automatically suspend or blacklist rooms with sustained losses or player harassment. Repair and defense costs are not counted yet, and invader cores do not suspend a mission.
 - [x] Plan bounded remote construction and exact mission spawns, with coverage in `test/remote.regression.test.js`.
 
 ---
@@ -166,7 +166,7 @@
 ## 🛡️ Reliability, Availability & Scalability (RAS) Guarantees
 
 1. **CPU Throttling**:
-   - If `Game.cpu.bucket < 1000`, non-essential subsystems (visuals, road heatmaps, construction planning) sleep while factory production, terminal/logistics work, spawning, towers, and defense continue.
+   - If `Game.cpu.bucket < 1000`, non-essential subsystems (visuals, road heatmaps, construction planning, factories, lab reactions, terminal planning, market) sleep while logistics, spawning, creeps, towers, and defense continue.
 2. **Memory Safety**:
    - Serialized memory is sampled every 100 ticks through `RawMemory`; warnings above 1.5 MB are rate-limited rather than enforcing a hard 1 MB limit.
    - Eliminated synchronous 2,500-cell array serializations in `tile.watcher.js`.
@@ -175,6 +175,6 @@
    - Every job in `main.js` is isolated by `main.scheduler.js`; a spawning error cannot stop towers, links, or creeps.
    - Emergency Harvester recovery triggers automatically if all creeps die and energy $\ge 200$.
 4. **Defensive Programming**:
-   - All room and structure lookups guarded against visionless rooms (`Game.getObjectById` null checks).
+   - Room and structure lookups in the managers are guarded against visionless rooms (`Game.getObjectById` null checks).
    - Safe role iteration preventing uncaught `TypeError` propagation.
 
