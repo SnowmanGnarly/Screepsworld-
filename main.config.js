@@ -87,6 +87,19 @@ module.exports = {
 		MAX_ENTRIES: 500, // bound on cached values across all rooms
 	},
 
+	LAB: {
+		ACQUIRE_TIMEOUT: 1500, // ticks a goal may wait on imports without any arriving
+		REACT_STALL: 600, // ticks a goal may hold stocked reagents without producing
+		BLOCK_TICKS: 1000, // ticks a goal that could not proceed is skipped, so the next one can run
+		MAX_PLANS_PER_SELECT: 4, // recipe trees walked in one selection
+		PLAN_SCALE_PASSES: 3, // attempts to shrink a batch to the reagents that can be obtained
+		MIN_BATCH: 100, // a smaller derived batch is not worth clearing the labs for
+		DEMAND_TTL: 3000, // ticks a seen boost request keeps its stock topped up, about two creep lifetimes
+		BOOST_SPAWNS_AHEAD: 2, // spawns of the largest seen body to keep stocked per compound
+		PRICE_TTL: 5000, // ticks between reads of market history
+		MIN_PROFIT_RATE: 1, // credits per reaction cooldown tick below which profit goals are ignored
+	},
+
 	MEMORY: {
 		ROOM_PRUNE_INTERVAL: 1000, // ticks between cleanups of memory for rooms we no longer use
 		STUCK_PRUNE_INTERVAL: 100, // ticks between cleanups of heap state for dead creeps

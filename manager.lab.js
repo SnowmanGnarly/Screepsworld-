@@ -2,7 +2,14 @@ var MainCache = require('./main.cache');
 var MainHeap = require('./main.heap');
 var MainUtil = require('./main.util');
 var TerminalManager = require('./manager.terminal');
+var MarketManager = require('./manager.market');
+var CpuManager = require('./manager.cpu');
+var LabMatrix = require('./lab.matrix');
 var info = require('./main.info');
+var config = require('./main.config').LAB;
+
+const PHASE = { IDLE: 'idle', SELECT: 'select', ACQUIRE: 'acquire', REACT: 'react' };
+const TIER = LabMatrix.TIER;
 
 class LabManager {
 
@@ -45,10 +52,10 @@ class LabManager {
             boostRequests: {},
             boosts: {},
             nextPlanningAt: 0,
-            nextTopologyAt: 0,
             produceRetryAfter: 0,
         };
         var memory = Object.assign(defaults, room.memory.lab || {});
+        delete memory.nextTopologyAt; // replaced by the heap's record of the last search
         memory.enabled = memory.enabled !== false;
         memory.batchSize = this._clamp(memory.batchSize, 5, 100000, 1000);
         memory.maxDepth = this._clamp(memory.maxDepth, 0, 10, 6);
@@ -100,35 +107,31 @@ class LabManager {
         }
 
         this._topology = this._getTopology();
-        var goal = this._memory.activeGoal;
-        if (goal && this._goals[goal.resourceType] === undefined) {
-            this._cancelGoal('goal removed');
-            goal = null;
-        }
-        if (goal && this._getRoomStock(goal.resourceType) >= goal.configuredTarget) {
-            this._completeGoal();
-            goal = null;
-        }
-        if (!goal && Game.time >= (this._memory.nextPlanningAt || 0)) {
-            goal = this._startNextGoal();
-        }
-        if (goal && Game.time >= (this._memory.nextPlanningAt || 0)) {
-            this._updateRequests(goal);
-            this._memory.nextPlanningAt = Game.time + this._memory.planningInterval;
-        }
+        var goal = this._advance();
 
         this._alignTopologyToStep(goal ? goal.steps[goal.stepIndex] : null);
-        this._projectLabMetadata(goal ? goal.steps[goal.stepIndex] : null);
         if (goal) this._produceActive(goal);
         goal = this._memory.activeGoal;
         this._alignTopologyToStep(goal ? goal.steps[goal.stepIndex] : null);
+        // after production, because this is what logistics reads later in the same tick
         this._projectLabMetadata(goal ? goal.steps[goal.stepIndex] : null);
     }
 
-    _getTopology() {
-        var current = this._readTopology();
-        if (current && Game.time < (this._memory.nextTopologyAt || 0)) return current;
+    /*
+     * Labs do not move, so the search only runs again when the labs available to reactions change:
+     * one is built or destroyed, or a player stocks one by hand. A global reset costs one search.
+     */
 
+    _getTopology() {
+        var signature = this._reactionLabs.map(lab => lab.id).join();
+        var searched = MainHeap.namespace('labTopology');
+        var known = searched[this._room.name];
+        if (known && known.signature === signature) {
+            var saved = this._readTopology(false);
+            if (!!saved === known.found) return saved;
+        }
+
+        var current = this._readTopology(true);
         var best = null;
         var labs = this._reactionLabs;
         for (var first = 0; first < labs.length; first++) {
@@ -148,7 +151,7 @@ class LabManager {
             var currentScore = current.outputs.length;
             if (currentScore >= best.outputs.length) best = current;
         }
-        this._memory.nextTopologyAt = Game.time + this._memory.planningInterval;
+        searched[this._room.name] = { signature, found: !!best };
         this._memory.assignments = best ? {
             inputA: best.inputA.id,
             inputB: best.inputB.id,
@@ -157,14 +160,14 @@ class LabManager {
         return best;
     }
 
-    _readTopology() {
+    _readTopology(checkRange) {
         var assignments = this._memory.assignments;
         var inputA = this._labsById.get(assignments.inputA);
         var inputB = this._labsById.get(assignments.inputB);
         if (!inputA || !inputB || inputA.id === inputB.id) return null;
         var outputs = assignments.outputs.map(id => this._labsById.get(id)).filter(lab => {
-            return lab && lab.id !== inputA.id && lab.id !== inputB.id &&
-                lab.pos.inRangeTo(inputA.pos, 2) && lab.pos.inRangeTo(inputB.pos, 2);
+            if (!lab || lab.id === inputA.id || lab.id === inputB.id) return false;
+            return !checkRange || (lab.pos.inRangeTo(inputA.pos, 2) && lab.pos.inRangeTo(inputB.pos, 2));
         });
         return outputs.length > 0 ? { inputA, inputB, outputs } : null;
     }
@@ -180,30 +183,157 @@ class LabManager {
         this._memory.assignments.inputB = inputA.id;
     }
 
-    _startNextGoal() {
-        if (!this._topology) {
-            this._memory.nextPlanningAt = Game.time + this._memory.planningInterval;
-            return null;
+    /*
+     * idle -> select -> acquire <-> react -> idle. Draining is not a room phase: each lab already
+     * drains itself when its contents do not match the current step.
+     */
+
+    _advance() {
+        var fsm = this._getFsm();
+        for (var hop = 0; hop < LabManager.MAX_PHASE_HOPS; hop++) {
+            var next = this._runPhase(fsm);
+            if (next === fsm.phase) break;
+            fsm.phase = next;
         }
-        var resourceType = Object.keys(this._goals).sort().find(resource => {
-            return this._getRoomStock(resource) < this._goals[resource] && !!this._recipes[resource];
+        return this._memory.activeGoal;
+    }
+
+    _getFsm() {
+        if (!this._memory.fsm) {
+            // a goal already in memory carries on, and counts as stalled only from now
+            this._memory.fsm = { phase: this._memory.activeGoal ? PHASE.REACT : PHASE.IDLE, progress: null, progressAt: Game.time, blocked: {} };
+        }
+        return this._memory.fsm;
+    }
+
+    _runPhase(fsm) {
+        switch (fsm.phase) {
+            case PHASE.SELECT: return this._onSelect(fsm);
+            case PHASE.ACQUIRE:
+            case PHASE.REACT: return this._onGoal(fsm);
+            default: return this._onIdle();
+        }
+    }
+
+    _onIdle() {
+        if (this._memory.activeGoal) return PHASE.REACT;
+        var woken = LabMatrix.takeWake(this._room.name);
+        return woken || Game.time >= (this._memory.nextPlanningAt || 0) ? PHASE.SELECT : PHASE.IDLE;
+    }
+
+    _onSelect(fsm) {
+        var goal = this._topology ? this._selectGoal(fsm) : null;
+        if (goal) return Object.keys(goal.pendingComponents).length > 0 ? PHASE.ACQUIRE : PHASE.REACT;
+        this._memory.nextPlanningAt = Game.time + this._memory.planningInterval;
+        return PHASE.IDLE;
+    }
+
+    _onGoal(fsm) {
+        var goal = this._memory.activeGoal;
+        if (!goal) return PHASE.IDLE;
+        // a goal without a tier predates the matrix and belongs to the player
+        var manual = goal.tier === undefined || goal.tier === TIER.MANUAL;
+        if (manual && this._goals[goal.resourceType] === undefined) {
+            this._cancelGoal('goal removed');
+            return PHASE.IDLE;
+        }
+        if (this._getRoomStock(goal.resourceType) >= goal.configuredTarget) {
+            this._completeGoal();
+            return PHASE.IDLE;
+        }
+        if (Game.time >= (this._memory.nextPlanningAt || 0)) {
+            this._updateRequests(goal);
+            this._memory.nextPlanningAt = Game.time + this._memory.planningInterval;
+        }
+        var waiting = Object.keys(goal.pendingComponents).length > 0;
+        if (this._isStalled(goal, fsm, waiting)) {
+            fsm.blocked[goal.resourceType] = Game.time + config.BLOCK_TICKS;
+            this._cancelGoal(waiting ? 'imports did not arrive' : 'reagents did not react');
+            return PHASE.IDLE;
+        }
+        return waiting ? PHASE.ACQUIRE : PHASE.REACT;
+    }
+
+    // Keeps a high-water mark, so an amount that rises and falls back does not reset the clock.
+    _isStalled(goal, fsm, waiting) {
+        var progress = goal.steps.reduce((sum, step) => sum + step.produced, 0);
+        Object.keys(goal.pendingComponents).forEach(resourceType => progress -= goal.pendingComponents[resourceType]);
+        if (fsm.progress === null || progress > fsm.progress) {
+            fsm.progress = progress;
+            fsm.progressAt = Game.time;
+            return false;
+        }
+        return Game.time - fsm.progressAt > (waiting ? config.ACQUIRE_TIMEOUT : config.REACT_STALL);
+    }
+
+    _selectGoal(fsm) {
+        Object.keys(fsm.blocked).forEach(resourceType => {
+            if (fsm.blocked[resourceType] <= Game.time) delete fsm.blocked[resourceType];
         });
-        if (!resourceType) {
-            this._memory.nextPlanningAt = Game.time + this._memory.planningInterval;
-            return null;
+        var stockOf = resourceType => this._getRoomStock(resourceType);
+        var candidates = LabMatrix.rankCandidates(this._room.name, this._goals, stockOf, this._getProfitGoals()).filter(candidate => {
+            return !!this._recipes[candidate.resourceType] && !fsm.blocked[candidate.resourceType];
+        }).slice(0, config.MAX_PLANS_PER_SELECT);
+        for (var candidate of candidates) {
+            var plan = this._planFeasible(candidate);
+            if (plan) {
+                fsm.progress = null;
+                fsm.progressAt = Game.time;
+                return this._startGoal(candidate, plan);
+            }
+            fsm.blocked[candidate.resourceType] = Game.time + config.BLOCK_TICKS;
         }
-        var missing = Math.min(this._memory.batchSize, this._goals[resourceType] - this._getRoomStock(resourceType));
-        var plan = this._planRecipe(resourceType, missing);
-        if (plan.invalid.length > 0 || plan.steps.length === 0) {
-            this._memory.planningError = plan.invalid[0] || 'no recipe';
-            this._memory.nextPlanningAt = Game.time + this._memory.planningInterval;
-            return null;
+        return null;
+    }
+
+    _getProfitGoals() {
+        if (this._memory.autoProfit !== true || CpuManager.getTier() < CpuManager.TIER_NORMAL) return [];
+        return LabMatrix.rankProfit(MarketManager.getConfig(this._room), this._recipes);
+    }
+
+    /*
+     * Shrinks a derived batch to what can actually be obtained. Every step consumes one reagent per
+     * product, so removing the worst shortfall from the batch is always enough. A manual goal keeps
+     * its full size and its import requests, since the player may be about to supply it.
+     */
+
+    _planFeasible(candidate) {
+        var amount = Math.min(this._memory.batchSize, candidate.target - this._getRoomStock(candidate.resourceType));
+        for (var pass = 0; pass < config.PLAN_SCALE_PASSES; pass++) {
+            var plan = this._planRecipe(candidate.resourceType, amount);
+            if (plan.invalid.length > 0 || plan.steps.length === 0) {
+                this._memory.planningError = plan.invalid[0] || 'no recipe';
+                return null;
+            }
+            if (candidate.tier === TIER.MANUAL) return plan;
+            var shortfall = Object.keys(plan.imports).reduce((worst, resourceType) => {
+                return Math.max(worst, plan.imports[resourceType] - this._getImportSupply(resourceType));
+            }, 0);
+            if (shortfall <= 0) return plan;
+            amount = Math.floor((amount - shortfall) / LabManager.REACTION_AMOUNT) * LabManager.REACTION_AMOUNT;
+            if (amount < config.MIN_BATCH) return null;
         }
+        return null;
+    }
+
+    _getImportSupply(resourceType) {
+        var elsewhere = MainUtil.findAllRooms().reduce((sum, room) => {
+            if (room === this._room || !room.terminal || !room.memory.base) return sum;
+            return sum + TerminalManager.getAvailable(room, resourceType);
+        }, 0);
+        var market = MarketManager.getConfig(this._room);
+        var rule = market.enabled && market.buy ? market.resources[resourceType] : null;
+        if (!rule || !rule.buy || !(rule.maxBuyPrice > 0)) return elsewhere;
+        return elsewhere + Math.max(0, rule.target - TerminalManager.getTotalStock(this._room, resourceType));
+    }
+
+    _startGoal(candidate, plan) {
         var rootStep = plan.steps[plan.steps.length - 1];
         var goal = {
-            resourceType: resourceType,
+            resourceType: candidate.resourceType,
+            tier: candidate.tier,
             target: rootStep.amount,
-            configuredTarget: this._goals[resourceType],
+            configuredTarget: candidate.target,
             produced: 0,
             pending: rootStep.amount,
             steps: plan.steps,
@@ -605,6 +735,9 @@ class LabManager {
             });
             return remaining <= 0;
         });
+        Object.keys(counts).forEach(resourceType => {
+            LabMatrix.noteBoostDemand(room.name, resourceType, counts[resourceType], !complete);
+        });
         if (!complete) return { allow: !required, plan: null };
         return {
             allow: true,
@@ -723,6 +856,7 @@ class LabManager {
     }
 }
 
+LabManager.MAX_PHASE_HOPS = 5;
 LabManager.MAX_DEPENDENCY_STEPS = 32;
 LabManager.MAX_CONFIGURED_GOALS = 16;
 LabManager.REACTION_AMOUNT = typeof LAB_REACTION_AMOUNT === 'undefined' ? 5 : LAB_REACTION_AMOUNT;
