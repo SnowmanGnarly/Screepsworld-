@@ -1,3 +1,4 @@
+// @ts-check
 /*
  * Labels stored in Memory. Tunable values live in main.config.js.
  */

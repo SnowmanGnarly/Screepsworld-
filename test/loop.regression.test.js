@@ -10,8 +10,10 @@ const config = require('../main.config');
 const CpuManager = require('../manager.cpu');
 const BaseManager = require('../manager.base');
 const FactoryManager = require('../manager.factory');
+const IntelManager = require('../manager.intel');
 const LabManager = require('../manager.lab');
 const MayorManager = require('../manager.mayor');
+const MemoryManager = require('../manager.memory');
 const main = require('../main');
 
 describe('Loop design', function () {
@@ -205,6 +207,40 @@ describe('Loop design', function () {
             assert.match(Game.notifications[0], /Could not run factory for A: Error: injected/);
         });
 
+        it('sends no more emails in a tick than the game accepts, and sends the rest on later ticks', function () {
+            const sentAt = [];
+            Game.notify = (message, groupMinutes) => sentAt.push({ tick: Game.time, message, groupMinutes });
+            const room = baseRoom('A');
+            room.memory.defense = {};
+            for (let index = 0; index < 25; index++) {
+                MainInfo.failure('problem:' + index, 'Problem ' + index, new Error('injected'));
+            }
+            const DefenseManager = require('../manager.defense');
+            new DefenseManager(room)._handleAlerts({ level: config.DEFENSE.DEFENDER_THREAT_LEVEL, score: 300 });
+            assert.equal(sentAt.length, config.CPU.NOTIFY_PER_TICK);
+            for (let tick = 0; tick < 3; tick++) {
+                Game.time++;
+                MainInfo.flushNotifications();
+            }
+            const perTick = {};
+            sentAt.forEach(entry => { perTick[entry.tick] = (perTick[entry.tick] || 0) + 1; });
+            assert.ok(Object.values(perTick).every(count => count <= config.CPU.NOTIFY_PER_TICK), JSON.stringify(perTick));
+            assert.equal(sentAt.length, 26, 'every problem and the alert reach the owner');
+            assert.equal(sentAt.find(entry => /DEFENSE ALERT/.test(entry.message)).groupMinutes, 0, 'an invasion alert is never bundled');
+        });
+
+        it('sends the waiting emails on the next tick of the main loop', function () {
+            const sent = [];
+            Game.notify = message => sent.push(message);
+            for (let index = 0; index < 25; index++) {
+                MainInfo.failure('problem:' + index, 'Problem ' + index, new Error('injected'));
+            }
+            assert.equal(sent.length, config.CPU.NOTIFY_PER_TICK);
+            Game.time++;
+            main.loop();
+            assert.ok(sent.some(message => /Problem 24:/.test(message)), 'the last problem went out a tick later');
+        });
+
         it('lets the factories of other rooms carry on past a room that throws', function () {
             baseRoom('A');
             baseRoom('B');
@@ -362,11 +398,23 @@ describe('Loop design', function () {
         });
 
         it('keeps periodic memory housekeeping apart', function () {
-            const { MEASURE_INTERVAL, STUCK_PRUNE_INTERVAL, STUCK_PRUNE_PHASE, ROOM_PRUNE_INTERVAL, ROOM_PRUNE_PHASE } = config.MEMORY;
+            const { MEASURE_INTERVAL, STUCK_PRUNE_INTERVAL, STUCK_PRUNE_PHASE, ROOM_PRUNE_INTERVAL, ROOM_PRUNE_PHASE, INTEL_CLEANUP_INTERVAL, INTEL_CLEANUP_PHASE } = config.MEMORY;
             for (let time = 0; time < 10000; time++) {
-                const running = [time % MEASURE_INTERVAL === 0, time % STUCK_PRUNE_INTERVAL === STUCK_PRUNE_PHASE, time % ROOM_PRUNE_INTERVAL === ROOM_PRUNE_PHASE];
+                const running = [time % MEASURE_INTERVAL === 0, time % STUCK_PRUNE_INTERVAL === STUCK_PRUNE_PHASE, time % ROOM_PRUNE_INTERVAL === ROOM_PRUNE_PHASE, time % INTEL_CLEANUP_INTERVAL === INTEL_CLEANUP_PHASE];
                 assert.ok(running.filter(Boolean).length <= 1, 'tick ' + time);
             }
+        });
+
+        it('cleans up intel on its interval rather than every tick', function () {
+            const original = IntelManager.cleanup;
+            let cleanups = 0;
+            IntelManager.cleanup = () => { cleanups++; };
+            try {
+                for (Game.time = 1; Game.time <= 10 * config.MEMORY.INTEL_CLEANUP_INTERVAL; Game.time++) MemoryManager._deleteUnusedMemory();
+            } finally {
+                IntelManager.cleanup = original;
+            }
+            assert.equal(cleanups, 10);
         });
     });
 });

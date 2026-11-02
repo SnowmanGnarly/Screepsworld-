@@ -168,3 +168,19 @@ describe('Cross-cutting RAS regressions', function () {
         assert.equal(spawn.spawning, null);
     });
 });
+
+describe('Creep speech', function () {
+    beforeEach(function () {
+        resetScreeps();
+    });
+
+    it('keeps the placeholder message within the 10 characters the game shows', function () {
+        const room = makeRoom('A');
+        const creep = makeCreep(room, {});
+        const said = [];
+        creep.say = message => said.push(message);
+        new RolePrototype('Placeholder')._work(creep);
+        assert.equal(said.length, 1);
+        assert.ok(said[0].length <= 10, JSON.stringify(said[0]) + ' is ' + said[0].length + ' characters');
+    });
+});

@@ -280,20 +280,26 @@ class TerminalManager {
         managers.forEach(manager => {
             try {
                 var desired = new Map();
-                Object.keys(manager._memory.resources).forEach(resourceType => desired.set(resourceType, { amount: 0, priority: 40 }));
+                // with nothing reserved the priority stays at 0, so that a market deal can still position
+                Object.keys(manager._memory.resources).forEach(resourceType => desired.set(resourceType, { amount: 0, priority: 0 }));
                 requests.filter(request => request.status === 'open' && request.reservedBy === manager._room.name).forEach(request => {
-                    var resource = desired.get(request.resourceType) || { amount: 0, priority: 40 };
+                    var resource = desired.get(request.resourceType) || { amount: 0, priority: 0 };
                     resource.amount += request.reservedAmount;
-                    resource.priority = Math.max(resource.priority, request.priority);
+                    resource.priority = Math.max(40, resource.priority, request.priority);
                     desired.set(request.resourceType, resource);
-                    var energy = desired.get(RESOURCE_ENERGY) || { amount: 0, priority: 40 };
+                    var energy = desired.get(RESOURCE_ENERGY) || { amount: 0, priority: 0 };
                     energy.amount += request.reservedFee;
-                    energy.priority = Math.max(energy.priority, request.priority);
+                    energy.priority = Math.max(40, energy.priority, request.priority);
                     desired.set(RESOURCE_ENERGY, energy);
                 });
                 desired.forEach((value, resourceType) => {
                     this.setPositioningRule(manager._room, resourceType, value.amount, value.amount, value.priority, true);
                 });
+                // a finished request's rule would hold its stock and outrank the market for good.
+                // The market sets its own again after this, for as long as its deal is pending
+                var logistics = manager._room.memory.logistics;
+                var policy = logistics && logistics.terminalStockPolicy || {};
+                Object.keys(policy).filter(resourceType => !desired.has(resourceType)).forEach(resourceType => delete policy[resourceType]);
             } catch (error) {
                 info.failure('terminal:position:' + manager._room.name, 'Could not position terminal resources for ' + manager._room.name, error, manager._room);
             }

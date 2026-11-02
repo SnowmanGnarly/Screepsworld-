@@ -145,6 +145,8 @@ class MarketManager {
     _findBestOrder(resourceType, side, orders) {
         var rule = this._memory.resources[resourceType];
         if (!rule || !rule[side]) return null;
+        // a sell rule needs both limits, or it would sell the whole stock at any price
+        if (side === 'sell' && !(rule.max > 0 && rule.minSellPrice > 0)) return null;
         var stock = TerminalManager.getTotalStock(this._room, resourceType);
         var wanted = 0;
         if (side === 'buy' && stock < rule.min) wanted = rule.target - stock;

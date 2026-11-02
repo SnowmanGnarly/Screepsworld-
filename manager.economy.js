@@ -47,7 +47,7 @@ class EconomyManager {
 					MainUtil.fetchMemoryOfStructure(structure).type === constants.LINK_TYPE_TARGET &&
 					structure.pos.inRangeTo(room.storage.pos, config.HUB_LINK_RANGE);
 			}) || null;
-		});
+		}, room);
 	}
 
 	static hasDeliveringLink(room, source) {
@@ -80,7 +80,7 @@ class EconomyManager {
 			if (container && container.pos.isNearTo(source.pos)) return { x: container.pos.x, y: container.pos.y };
 			var dropoff = container || this._findSourceLink(room, source);
 			return dropoff ? this._findTileTouching(room, source, dropoff) : null;
-		});
+		}, room);
 	}
 
 	static _findTileTouching(room, source, dropoff) {
@@ -155,7 +155,7 @@ class EconomyManager {
 	}
 
 	static _getWorkerDraw(room) {
-		return MainCache.memo('workerDraw:' + room.name, () => ({ amount: 0 }));
+		return MainCache.tickRecord('workerDraw:' + room.name, () => ({ amount: 0 }));
 	}
 
 	// a room with no storage or terminal has no savings to protect, and spends what it mines
@@ -193,7 +193,7 @@ class EconomyManager {
 	static getMinableSources(room) {
 		return MainCache.memo('minable:' + room.name, () => {
 			return MainCache.find(room, FIND_SOURCES).filter(source => this.hasDropoff(room, source));
-		});
+		}, room);
 	}
 
 	static getDesiredMiners(room) {
@@ -214,7 +214,7 @@ class EconomyManager {
 			var minable = this.getMinableSources(room).map(source => source.id);
 			return creeps.some(creep => creep.memory.role === 'Miner' && minable.includes(creep.memory.source)) &&
 				creeps.some(creep => creep.memory.role === 'Storekeeper');
-		});
+		}, room);
 	}
 
 	/*
@@ -320,7 +320,7 @@ class EconomyManager {
 				var distance = this.getRouteLength(room, hub, source);
 				return sum + Math.ceil(this.getSourceOutput(source) * 2 * distance / CARRY_CAPACITY);
 			}, 0);
-		});
+		}, room);
 	}
 
 	/*

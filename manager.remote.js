@@ -455,7 +455,8 @@ class RemoteManager {
         mission.stats.lastROIUpdate = Game.time;
         mission.stats.roi = this.calculateROI(mission);
         var age = Game.time - (mission.stats.windowStarted || mission.created || Game.time);
-        if (age >= RemoteManager.ROI_MINIMUM_AGE && mission.stats.roi < -1) mission.stats.negativeEvaluations++;
+        // only an active mission can earn, so a suspension must not count against it once it resumes
+        if (mission.status === 'active' && age >= RemoteManager.ROI_MINIMUM_AGE && mission.stats.roi < -1) mission.stats.negativeEvaluations++;
         else mission.stats.negativeEvaluations = 0;
         if (mission.stats.negativeEvaluations >= 2 && mission.status === 'active') {
             this.suspendMission(mission.id, 'negative ROI', RemoteManager.SUSPENSION_TICKS);

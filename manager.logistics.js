@@ -593,7 +593,7 @@ class LogisticsManager {
                 else claims.targets.add(task.targetId);
             });
             return claims;
-        });
+        }, room);
     }
 
     /*
@@ -654,7 +654,7 @@ class LogisticsManager {
         return MainCache.memo('workers:' + room.name, () => MainCache.getCreeps().some(creep => {
             return !creep.spawning && creep.room.name === room.name &&
                 (creep.memory.role === 'Storekeeper' || creep.memory.role === 'Courier');
-        }));
+        }), room);
     }
 
     static getDesiredWorkerCount(room, roleName) {

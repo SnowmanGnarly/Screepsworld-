@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const {
     makeStore, makeRoom, makeStructure, makeCreep, makeSpawn, makePosition, setFind, resetScreeps, registerObject,
 } = require('./helpers/screeps');
+const config = require('../main.config');
 const MainCache = require('../main.cache');
 const MemoryManager = require('../manager.memory');
 const IntelManager = require('../manager.intel');
@@ -94,6 +95,24 @@ describe('Remote outpost and empire regressions', function () {
         resetScreeps();
     });
 
+    it('does not hold evaluations made during a suspension against a mission that resumes', function () {
+        const mission = { id: 'm', status: 'suspended', stats: { negativeEvaluations: 0, windowStarted: 1 } };
+        IntelManager.ensureMemory().missions.m = mission;
+        const calculateROI = RemoteManager.calculateROI;
+        RemoteManager.calculateROI = () => -5;
+        try {
+            Game.time = 100000;
+            for (let evaluation = 0; evaluation < 3; evaluation++) RemoteManager._updateROI(mission, true);
+            mission.status = 'active';
+            RemoteManager._updateROI(mission, true);
+            assert.equal(mission.status, 'active', 'one poor evaluation after resuming is not enough');
+            RemoteManager._updateROI(mission, true);
+            assert.equal(mission.status, 'suspended', 'two in a row still are');
+        } finally {
+            RemoteManager.calculateROI = calculateROI;
+        }
+    });
+
     it('normalizes intel and bounds empire cleanup without dropping active offscreen state', function () {
         const { room } = baseRoom();
         const source = addSource(room, 'source-A');
@@ -112,7 +131,7 @@ describe('Remote outpost and empire regressions', function () {
         assert.equal(observation.sources[0].id, source.id);
         assert.equal(observation.sources[0].x, source.pos.x);
         assert.equal(observation.sources[0].pos, undefined);
-        Game.time = 4000;
+        Game.time = 4000 + config.MEMORY.INTEL_CLEANUP_PHASE;
         MemoryManager._deleteUnusedMemory();
 
         assert.equal(Memory.empire.version, 1);
@@ -229,6 +248,79 @@ describe('Remote outpost and empire regressions', function () {
         setFind(remote, FIND_CONSTRUCTION_SITES, []);
         MainCache.invalidateRoom(remote);
         role._work(miner);
+        assert.ok(remote.find(FIND_DROPPED_RESOURCES).some(drop => drop.resourceType === RESOURCE_ENERGY && drop.amount > 0));
+    });
+
+    it('never harvests and builds in one tick, so what it records is what it mined', function () {
+        const { room: home } = baseRoom();
+        const remote = remoteRoom();
+        const source = addSource(remote);
+        const site = { id: 'site', room: remote, structureType: STRUCTURE_CONTAINER, pos: makePosition(remote, 20, 21), progress: 0, progressTotal: 5000 };
+        setFind(remote, FIND_CONSTRUCTION_SITES, [site]);
+        const mission = configuredMission(home, remote);
+        const miner = missionCreep(remote, mission, 'RemoteMiner', {
+            body: [WORK, WORK, WORK, WORK, WORK, CARRY, MOVE], pos: source.pos, store: makeStore(100, { [RESOURCE_ENERGY]: 50 }),
+            memory: {
+                role: 'RemoteMiner', home: 'A', missionId: mission.id, targetRoom: 'B', homeRoom: 'A',
+                sourceId: source.id, sourcePos: { roomName: 'B', x: 20, y: 20 },
+            },
+        });
+        // as in the engine, a harvest lands at the end of the tick, and only the rightmost of harvest
+        // and build runs in a tick, while harvest still returns OK
+        let harvested = 0;
+        let built = false;
+        const harvest = miner.harvest;
+        const build = miner.build;
+        miner.harvest = function (target) {
+            const stored = this.store.getUsedCapacity(RESOURCE_ENERGY);
+            const energy = target.energy;
+            const result = harvest.call(this, target);
+            harvested = this.store.getUsedCapacity(RESOURCE_ENERGY) - stored;
+            this.store.set(RESOURCE_ENERGY, stored);
+            target.energy = energy;
+            return result;
+        };
+        miner.build = function (target) {
+            const result = build.call(this, target);
+            if (result === OK) built = true;
+            return result;
+        };
+        const role = new RemoteMiner();
+        let conflicts = 0;
+        for (let tick = 0; tick < 50; tick++) {
+            Game.time++;
+            MainCache.initRound([]);
+            harvested = 0;
+            built = false;
+            role._work(miner);
+            if (harvested > 0 && built) {
+                conflicts++;
+            } else if (harvested > 0) {
+                source.energy -= harvested;
+                miner.store.set(RESOURCE_ENERGY, miner.store.getUsedCapacity(RESOURCE_ENERGY) + harvested);
+            }
+        }
+        assert.equal(conflicts, 0);
+        assert.ok(site.progress > 0, 'it still builds');
+        assert.equal(mission.stats.energyHarvested, SOURCE_ENERGY_CAPACITY - source.energy);
+    });
+
+    it('drops its energy rather than standing full beside a site it cannot build', function () {
+        const { room: home } = baseRoom();
+        const remote = remoteRoom();
+        const source = addSource(remote);
+        const site = { id: 'foreign-site', room: remote, structureType: STRUCTURE_ROAD, pos: makePosition(remote, 20, 21), progress: 0, progressTotal: 300 };
+        setFind(remote, FIND_CONSTRUCTION_SITES, [site]);
+        const mission = configuredMission(home, remote);
+        const miner = missionCreep(remote, mission, 'RemoteMiner', {
+            body: [WORK, WORK, CARRY, MOVE], pos: source.pos, store: makeStore(50, { [RESOURCE_ENERGY]: 50 }),
+            memory: {
+                role: 'RemoteMiner', home: 'A', missionId: mission.id, targetRoom: 'B', homeRoom: 'A',
+                sourceId: source.id, sourcePos: { roomName: 'B', x: 20, y: 20 },
+            },
+        });
+        miner.build = () => ERR_INVALID_TARGET;
+        new RemoteMiner()._work(miner);
         assert.ok(remote.find(FIND_DROPPED_RESOURCES).some(drop => drop.resourceType === RESOURCE_ENERGY && drop.amount > 0));
     });
 

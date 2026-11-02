@@ -136,6 +136,52 @@ describe('Getting out of stuck states', function () {
         });
     });
 
+    describe('a role that throws while spawning', function () {
+        let originalLog;
+
+        beforeEach(function () {
+            originalLog = console.log;
+            console.log = () => {};
+        });
+
+        afterEach(function () {
+            console.log = originalLog;
+        });
+
+        function spawnWith(breakRole) {
+            const room = baseRoom('A');
+            Game.spawns.Spawn1 = makeSpawn(room, { name: 'Spawn1', memory: { home: 'A' } });
+            const broken = new Upgrader();
+            broken.priority = 100;
+            broken.getDemand = () => 1;
+            broken.isNecessary = () => true;
+            breakRole(broken);
+            const healthy = new StoreKeeper();
+            healthy.priority = 50;
+            healthy.getDemand = () => 1;
+            healthy.isNecessary = () => true;
+            let spawned = 0;
+            healthy.spawnCreep = () => { spawned++; return { body: [] }; };
+            MainCache.initRound([broken, healthy]);
+            new BaseManager(room, [broken, healthy])._runSpawnQueue('A', false);
+            return spawned;
+        }
+
+        const boom = () => { throw new Error('broken role'); };
+
+        it('still spawns the others when working out its demand fails', function () {
+            assert.equal(spawnWith(role => { role.getDemand = boom; }), 1);
+        });
+
+        it('still spawns the others when asking whether it is needed fails', function () {
+            assert.equal(spawnWith(role => { role.isNecessary = boom; }), 1);
+        });
+
+        it('still spawns the others when its own spawn call fails', function () {
+            assert.equal(spawnWith(role => { role.spawnCreep = boom; }), 1);
+        });
+    });
+
     describe('creeps of a lost base', function () {
         it('join the nearest base that remains and run again', function () {
             const near = baseRoom('W2N1');
@@ -206,6 +252,36 @@ describe('Getting out of stuck states', function () {
                 BaseManager.prototype.runBase = original;
             }
             assert.deepEqual(order, ['A', 'B', 'B', 'A']);
+        });
+
+        it('takes creeps in turn within a room, so the same ones do not always stand still', function () {
+            const room = roomWithCreeps(3);
+            const runs = { c0: 0, c1: 0, c2: 0 };
+            let used = 0;
+            const upgrader = new Upgrader();
+            upgrader.run = creep => { runs[creep.name]++; used += 50; };
+            Game.cpu = { bucket: 100, tickLimit: 100, getUsed: () => used };
+            [10, 11, 12].forEach(time => {
+                Game.time = time;
+                used = 0;
+                MainCache.initRound([upgrader]);
+                new BaseManager(room, [upgrader])._moveCreeps();
+            });
+            assert.deepEqual(runs, { c0: 2, c1: 2, c2: 2 });
+        });
+
+        it('keeps the creeps in order while the CPU lasts, since that decides who reaches the energy first', function () {
+            const room = roomWithCreeps(3);
+            const order = [];
+            const upgrader = new Upgrader();
+            upgrader.run = creep => { order.push(creep.name); };
+            Game.cpu = { bucket: 9000, tickLimit: 500, getUsed: () => 0 };
+            [10, 11].forEach(time => {
+                Game.time = time;
+                MainCache.initRound([upgrader]);
+                new BaseManager(room, [upgrader])._moveCreeps();
+            });
+            assert.deepEqual(order, ['c0', 'c1', 'c2', 'c0', 'c1', 'c2']);
         });
 
         it('runs everyone when the game reports no limit', function () {

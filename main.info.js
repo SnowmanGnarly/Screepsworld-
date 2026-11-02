@@ -140,7 +140,45 @@ class MainInfo {
 		if (last !== undefined && Game.time - last < config.CPU.NOTIFY_INTERVAL) return;
 		MainHeap.namespace('notified')[key] = Game.time;
 		var shard = Game.shard ? '[' + Game.shard.name + '] ' : '';
-		Game.notify(shard + message, config.CPU.NOTIFY_GROUP_MINUTES);
+		this.sendEmail(shard + message, config.CPU.NOTIFY_GROUP_MINUTES);
+	}
+
+	/*
+	 * The game takes at most NOTIFY_PER_TICK emails in one tick and silently drops the rest, so every
+	 * email goes through here. What does not fit waits on the heap and goes out on the next ticks,
+	 * oldest first. A global reset loses what is waiting, and the wait is bounded.
+	 *
+	 * @param message
+	 * @param groupMinutes 0 sends at once; otherwise the game bundles emails within this time
+	 */
+
+	static sendEmail(message, groupMinutes = 0) {
+		var outbox = this._getOutbox();
+		if (outbox.sent < config.CPU.NOTIFY_PER_TICK) {
+			outbox.sent++;
+			Game.notify(message, groupMinutes);
+		} else if (outbox.waiting.length < config.CPU.NOTIFY_QUEUE_LIMIT) {
+			outbox.waiting.push({ message: message, groupMinutes: groupMinutes });
+		}
+	}
+
+	static flushNotifications() {
+		var outbox = this._getOutbox();
+		while (outbox.waiting.length > 0 && outbox.sent < config.CPU.NOTIFY_PER_TICK) {
+			var email = outbox.waiting.shift();
+			outbox.sent++;
+			Game.notify(email.message, email.groupMinutes);
+		}
+	}
+
+	static _getOutbox() {
+		var outbox = MainHeap.namespace('outbox');
+		if (outbox.tick !== Game.time) {
+			outbox.tick = Game.time;
+			outbox.sent = 0;
+		}
+		if (!outbox.waiting) outbox.waiting = [];
+		return outbox;
 	}
 
 	/*

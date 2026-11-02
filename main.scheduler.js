@@ -1,3 +1,4 @@
+// @ts-check
 /*
  * Runs the tick as a table of jobs. A job that throws is reported and the next job still runs,
  * so one bug cannot silence towers or leave creeps standing. Each job names the lowest CPU tier
@@ -10,8 +11,13 @@
 var info = require('./main.info');
 var CpuManager = require('./manager.cpu');
 
+/**
+ * @typedef {{ name: string, run: Function, tier?: number, every?: number, phase?: number, enabled?: () => boolean }} Job
+ */
+
 class MainScheduler {
 
+	/** @param {Job[]} jobs */
 	static run(jobs) {
 		var tier = CpuManager.getTier();
 		jobs.forEach(job => this._runIfDue(job, tier));
@@ -21,6 +27,10 @@ class MainScheduler {
 	 * Runs work that is not a job in the table, under the same boundary.
 	 */
 
+	/**
+	 * @param {string} name
+	 * @param {Function} action
+	 */
 	static guard(name, action) {
 		try {
 			action();
@@ -29,12 +39,20 @@ class MainScheduler {
 		}
 	}
 
+	/**
+	 * @param {Job} job
+	 * @param {number} tier
+	 */
 	static _runIfDue(job, tier) {
 		this.guard(job.name, () => {
 			if (this._isDue(job, tier)) CpuManager.measure(job.name, job.run);
 		});
 	}
 
+	/**
+	 * @param {Job} job
+	 * @param {number} tier
+	 */
 	static _isDue(job, tier) {
 		var jobTier = job.tier === undefined ? CpuManager.TIER_CRITICAL : job.tier;
 		if (tier < jobTier) return false;

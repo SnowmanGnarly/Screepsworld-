@@ -185,7 +185,13 @@ class BaseManager {
     			baseName: baseName,
     			mayWait: !(role.movesEnergy && !request.entry && this._countLivingCreeps(baseName, role) === 0),
     		};
-    		var spawned = request.entry ? this._spawnMissionRequest(request.entry, options) : this._spawnCreepForRole(role, options);
+    		var spawned = false;
+    		try {
+    			spawned = request.entry ? this._spawnMissionRequest(request.entry, options) : this._spawnCreepForRole(role, options);
+    		} catch (error) {
+    			info.failure('spawn:' + role.roleName + ':' + this._room.name, 'Could not spawn ' + role.roleName + ' for ' + this._room.name, error, this._room);
+    			continue;
+    		}
     		if (spawned) {
     			delete waits[baseName];
     			return true;
@@ -202,9 +208,14 @@ class BaseManager {
     _buildSpawnQueue(baseName) {
     	var queue = [];
     	this._allRoles.forEach(role => {
-    		if (this._countActiveCreeps(baseName, role) >= this._getRequiredNumber(role)) return;
-    		if (!role.isNecessary(this._room)) return;
-    		queue.push({ role: role, priority: role.priority + config.SPAWN.LOCAL_PRIORITY_OFFSET });
+    		// one broken role must not cost the room every other creep it needs
+    		try {
+    			if (this._countActiveCreeps(baseName, role) >= this._getRequiredNumber(role)) return;
+    			if (!role.isNecessary(this._room)) return;
+    			queue.push({ role: role, priority: role.priority + config.SPAWN.LOCAL_PRIORITY_OFFSET });
+    		} catch (error) {
+    			info.failure('demand:' + role.roleName + ':' + this._room.name, 'Could not work out demand for ' + role.roleName + ' in ' + this._room.name, error, this._room);
+    		}
     	});
     	this._collectMissionRequests(baseName).forEach(entry => {
     		queue.push({ role: this._rolesByName.get(entry.request.role), entry: entry, priority: entry.request.priority || 0 });
@@ -362,10 +373,17 @@ class BaseManager {
 
     _moveCreeps() {  
     	var baseName = this._room.memory.base.name;
-        MainCache.getCreepsByHome(baseName)
-	        	.filter(creep => !creep.spawning)
-	        	.forEach(creep => {
-            if (!CpuManager.hasCpuLeft()) return;
+    	var creeps = MainCache.getCreepsByHome(baseName).filter(creep => !creep.spawning);
+    	// the tick after one that ran out of CPU starts where it stopped, so the same creeps never starve.
+    	// Otherwise the order stays put, because it decides who gets to the stored energy first
+    	var turns = MainHeap.namespace('creepTurn');
+    	var first = creeps.length > 0 ? (turns[baseName] || 0) % creeps.length : 0;
+    	delete turns[baseName];
+    	creeps.slice(first).concat(creeps.slice(0, first)).forEach((creep, index) => {
+            if (!CpuManager.hasCpuLeft()) {
+            	if (turns[baseName] === undefined) turns[baseName] = (first + index) % creeps.length;
+            	return;
+            }
             try {
                 var creepRole = this._findNecessaryMandatoryRole(creep.memory.role);
                 if (LabManager.runCreep(creep, creepRole)) return;

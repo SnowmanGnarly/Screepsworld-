@@ -50,16 +50,20 @@ class RemoteMiner extends RolePrototype {
         }
 
         if (creep.store.getUsedCapacity(RESOURCE_ENERGY) <= 0) return;
-        if (this._buildNearbySite(creep)) return;
+        var site = this._findNearbySite(creep);
+        // the game runs only one of harvest and build in a tick, so the miner fills up and then builds
+        if (site && (harvestResult === OK || this._build(creep, site))) return;
         this._deliverOrDrop(creep);
     }
 
-    _buildNearbySite(creep) {
+    _findNearbySite(creep) {
         var sites = MainCache.find(creep.room, FIND_CONSTRUCTION_SITES, {
             filter: site => site.progress < site.progressTotal && creep.pos.inRangeTo(site, 3),
         }).sort((a, b) => creep.pos.getRangeTo(a) - creep.pos.getRangeTo(b));
-        if (sites.length === 0) return false;
-        var site = sites[0];
+        return sites[0] || null;
+    }
+
+    _build(creep, site) {
         var result = creep.build(site);
         if (result === ERR_NOT_IN_RANGE) this._moveToLocation(creep, site);
         if (result === OK && site.progress + creep.getActiveBodyparts(WORK) * BUILD_POWER >= site.progressTotal) {

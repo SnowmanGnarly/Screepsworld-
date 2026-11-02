@@ -511,6 +511,56 @@ describe('Hardening regressions', function () {
             assert.deepEqual(Object.keys(Memory.rooms).sort(), ['A', 'outpost', 'ownedElsewhere']);
             assert.deepEqual(Object.keys(Memory.structures), ['kept']);
         });
+
+        const config = require('../main.config');
+
+        function pruneTwice() {
+            MemoryManager._pruneRoomMemory();
+            Game.time += config.MEMORY.ROOM_PRUNE_INTERVAL;
+            MemoryManager._pruneRoomMemory();
+        }
+
+        it('drops a lost base once it stays out of sight, with nothing calling it home, for a whole prune interval', function () {
+            const { room } = homeRoom();
+            Memory.rooms = { A: room.memory, lost: { base: { name: 'Old' }, roadManager: {} } };
+            Memory.spawns = { Spawn1: { home: 'A' }, OldSpawn: { home: 'Old' } };
+            MemoryManager._pruneRoomMemory();
+            assert.ok(Memory.rooms.lost, 'one unseen prune is not proof the base is gone');
+            Game.time += config.MEMORY.ROOM_PRUNE_INTERVAL;
+            MemoryManager._pruneRoomMemory();
+            assert.deepEqual(Object.keys(Memory.rooms), ['A']);
+            assert.deepEqual(Object.keys(Memory.spawns), ['Spawn1']);
+        });
+
+        it('keeps an unseen base while a creep or a spawn still calls it home', function () {
+            const { room } = homeRoom();
+            Memory.rooms = { A: room.memory, creepHome: { base: { name: 'B' } }, spawnHome: { base: { name: 'C' } } };
+            Game.creeps.survivor = makeCreep(room, { name: 'survivor', memory: { role: 'Upgrader', home: 'B' } });
+            Game.spawns.Remote = makeSpawn(room, { name: 'Remote', memory: { home: 'C' } });
+            pruneTwice();
+            assert.deepEqual(Object.keys(Memory.rooms).sort(), ['A', 'creepHome', 'spawnHome']);
+        });
+
+        it('drops a lost base whose name a base we still have took over, as after a respawn', function () {
+            const { room } = homeRoom();
+            Memory.rooms = { A: room.memory, lost: { base: { name: 'A' } } };
+            Game.creeps.worker = makeCreep(room, { name: 'worker', memory: { role: 'Upgrader', home: 'A' } });
+            pruneTwice();
+            assert.deepEqual(Object.keys(Memory.rooms), ['A']);
+        });
+
+        it('starts the wait again when a lost base comes back into sight', function () {
+            const { room } = homeRoom();
+            Memory.rooms = { A: room.memory, back: { base: { name: 'Back' } } };
+            MemoryManager._pruneRoomMemory();
+            Game.rooms.back = makeRoom('back', { memory: Memory.rooms.back });
+            Game.time += config.MEMORY.ROOM_PRUNE_INTERVAL;
+            MemoryManager._pruneRoomMemory();
+            delete Game.rooms.back;
+            Game.time += config.MEMORY.ROOM_PRUNE_INTERVAL;
+            MemoryManager._pruneRoomMemory();
+            assert.ok(Memory.rooms.back, 'it was seen in between, so this is its first unseen prune');
+        });
     });
 
     describe('movement', function () {

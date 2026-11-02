@@ -20,7 +20,7 @@ class Handyman extends RolePrototype {
 
 	getDemand(room) {
 		// one spawned now could only stand idle, and would cost the reserve its body
-		if (EconomyManager.isReserveLocked(room)) return 0;
+		if (EconomyManager.isReserveLocked(room) && !this._mayDrawReserve(room)) return 0;
 		var wallTargetHits = this._getWallTargetHits(room);
 		var needsRepair = MainCache.find(room, FIND_STRUCTURES).some(structure => {
 			if (structure.structureType == STRUCTURE_WALL || structure.structureType == STRUCTURE_RAMPART) return structure.hits < wallTargetHits;
@@ -30,6 +30,12 @@ class Handyman extends RolePrototype {
 		return needsRepair ? 1 : 0;
 	}
 	
+	// walls under attack are what the reserve is for
+	_mayDrawReserve(room) {
+		var defense = room.memory.defense;
+		return Boolean(defense) && defense.threatLevel >= config.DEFENSE.DEFENDER_THREAT_LEVEL;
+	}
+
     _work(creep) {
     	this._commuteBetweenSourceAndTarget(creep, target => creep.repair(target));
     }

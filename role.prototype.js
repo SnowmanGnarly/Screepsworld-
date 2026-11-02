@@ -632,8 +632,8 @@ class RolePrototype {
 	 */
 
 	_work(creep) {
-		// do nothing on default
-		creep.say('🛑 unimplemented 🛑');
+		// do nothing on default; the game shows at most 10 characters
+		creep.say('🛑 no role');
 	}
 
 	/*

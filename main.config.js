@@ -1,3 +1,4 @@
+// @ts-check
 /*
  * Tunable policy lives here, grouped by the subsystem it steers. Three things do not belong in
  * this file: game rules (use the engine constants), values that follow from game state (derive
@@ -11,7 +12,7 @@ const SETTING_DEFAULTS = {
 };
 
 module.exports = {
-	VERSION: '1.11.0', // keep in step with package.json; version() shows what the shard is running
+	VERSION: '1.11.1', // keep in step with package.json; version() shows what the shard is running
 
 	ROLE_PRIORITY: { // spawn order, the higher the sooner. Local roles all come before mission creeps
 		Harvester: 100, Defender: 90, Miner: 85, Storekeeper: 75, Builder: 70, Upgrader: 50, Courier: 40,
@@ -28,6 +29,8 @@ module.exports = {
 		ERROR_LOG_INTERVAL: 50, // ticks between repeated reports of one failing job
 		NOTIFY_INTERVAL: 1000, // ticks between emails about one problem
 		NOTIFY_GROUP_MINUTES: 60, // the game bundles emails that arrive within this time
+		NOTIFY_PER_TICK: 20, // the game's limit on Game.notify calls in one tick; it drops the rest. No engine constant holds it
+		NOTIFY_QUEUE_LIMIT: 100, // emails that may wait on the heap for a later tick
 		TICK_MARGIN: 0.1, // share of the tick's CPU limit kept free, so the tick always finishes
 	},
 
@@ -133,6 +136,12 @@ module.exports = {
 		PRELOAD_TTL: 500, // ticks without a spawn attempt before a pre-loaded lab is released; a role may be saving energy
 	},
 
+	FACTORY: {
+		IMPORT_TIMEOUT: 1500, // ticks a goal may wait on imports without any arriving
+		PRODUCE_STALL: 600, // ticks a goal may wait without producing, longer than any recipe's cooldown
+		BLOCK_TICKS: 1000, // ticks a goal that could not proceed is skipped, so the next one can run
+	},
+
 	DIRECTOR: {
 		EVALUATE_INTERVAL: 50, // ticks between a room's looks at its economic goal; rooms take different ticks
 		MISSION_INTERVAL: 10, // ticks between checks on whether a room's missions have finished
@@ -150,6 +159,10 @@ module.exports = {
 
 	MEMORY: {
 		MEASURE_INTERVAL: 100, // ticks between readings of the serialized memory size
+		SIZE_WARNING_BYTES: 1500000, // serialized size that warns before the game's memory limit
+		SIZE_WARNING_PAUSE: 500, // ticks between those warnings
+		INTEL_CLEANUP_INTERVAL: 10, // ticks between cleanups of empire intel, missions and requests
+		INTEL_CLEANUP_PHASE: 7,
 		ROOM_PRUNE_INTERVAL: 1000, // ticks between cleanups of memory for rooms we no longer use
 		ROOM_PRUNE_PHASE: 533, // keeps the cleanups off the ticks that other periodic work runs on
 		STUCK_PRUNE_INTERVAL: 100, // ticks between cleanups of heap state for dead creeps
@@ -174,11 +187,13 @@ module.exports = {
 		RAMPART_PLAN_BUCKET: 5000, // bucket needed for the one expensive search behind a wall plan
 	},
 
+	/** @param {string} name */
 	getSetting(name) {
-		var settings = typeof Memory !== 'undefined' && Memory.settings;
-		return settings && settings[name] !== undefined ? settings[name] : SETTING_DEFAULTS[name];
+		var settings = typeof Memory !== 'undefined' && /** @type {any} */ (Memory).settings;
+		return settings && settings[name] !== undefined ? settings[name] : /** @type {any} */ (SETTING_DEFAULTS)[name];
 	},
 
+	/** @param {string} name */
 	isSetting(name) {
 		return Object.prototype.hasOwnProperty.call(SETTING_DEFAULTS, name);
 	},

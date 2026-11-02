@@ -139,7 +139,7 @@ class DefenseManager {
         this._memory.lastNotification = now;
         var message = '🛡️ [DEFENSE ALERT] Invasion in ' + this._room.name + ' at tick ' + now +
             '! Threat Level: ' + report.level + ', Threat Score: ' + report.score;
-        Game.notify(message);
+        info.sendEmail(message);
         info.error(message, this._room);
     }
 
@@ -173,7 +173,7 @@ class DefenseManager {
         var result = controller.activateSafeMode();
         var message = '🚨 [SAFE MODE] Room ' + this._room.name + ' activation result: ' + result;
         if (result === OK) {
-            Game.notify(message);
+            info.sendEmail(message);
             info.error(message, this._room);
         } else {
             info.warning(message, this._room);

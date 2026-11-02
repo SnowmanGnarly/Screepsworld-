@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const {
     makeStore, makeRoom, makeStructure, makeTerminal, makeFactory, makePosition, setFind, resetScreeps, registerObject,
 } = require('./helpers/screeps');
+const config = require('../main.config');
 const FactoryManager = require('../manager.factory');
 const TerminalManager = require('../manager.terminal');
 const LogisticsManager = require('../manager.logistics');
@@ -104,6 +105,88 @@ describe('Factory production chain regressions', function () {
         assert.equal(factory.store.getUsedCapacity(RESOURCE_OXIDANT), 10);
         assert.equal(FactoryManager.getActiveGoal(factory), null);
         assert.ok(TerminalManager.getResourceRequests().every(request => request.status !== 'open'));
+    });
+
+    describe('a goal that cannot finish', function () {
+        const { IMPORT_TIMEOUT, PRODUCE_STALL, BLOCK_TICKS } = config.FACTORY;
+        let originalLog;
+
+        beforeEach(function () {
+            originalLog = console.log;
+            console.log = () => {};
+        });
+
+        afterEach(function () {
+            console.log = originalLog;
+        });
+
+        function runUntil(time) {
+            for (; Game.time <= time; Game.time++) FactoryManager.runAll();
+            Game.time--;
+        }
+
+        it('gives up on imports that never arrive and lets the next goal run', function () {
+            const { factory } = factoryRoom('A', {
+                level: 2,
+                config: { enabled: true, goals: { [RESOURCE_COMPOSITE]: 20, [RESOURCE_OXIDANT]: 10 }, batchSize: 20, planningInterval: 1 },
+            });
+            Game.time = 1;
+            FactoryManager.runAll();
+            assert.equal(FactoryManager.getActiveGoal(factory).resourceType, RESOURCE_COMPOSITE);
+            runUntil(1 + IMPORT_TIMEOUT + 2);
+            assert.equal(factory.memory.lastCancelledGoal.resourceType, RESOURCE_COMPOSITE);
+            assert.equal(factory.memory.lastCancelledGoal.reason, 'imports did not arrive');
+            runUntil(Game.time + 2);
+            assert.equal(FactoryManager.getActiveGoal(factory).resourceType, RESOURCE_OXIDANT, 'the next goal gets its turn');
+        });
+
+        it('gives up on a goal this factory is not level enough to make, and tries again later', function () {
+            const { factory } = factoryRoom('A', {
+                level: 0,
+                factoryStore: { [RESOURCE_COMPOSITE]: 20, [RESOURCE_ENERGY]: 100 },
+                config: { enabled: true, goals: { [RESOURCE_OXIDANT]: 10 }, batchSize: 10, planningInterval: 1 },
+            });
+            Game.time = 1;
+            FactoryManager.runAll();
+            runUntil(1 + PRODUCE_STALL + 1);
+            assert.equal(FactoryManager.getActiveGoal(factory), null);
+            assert.equal(factory.memory.lastCancelledGoal.reason, 'could not produce');
+            const blockedUntil = Game.time + BLOCK_TICKS;
+            runUntil(blockedUntil - 2);
+            assert.equal(FactoryManager.getActiveGoal(factory), null, 'it stays blocked');
+            runUntil(blockedUntil + 2);
+            assert.equal(FactoryManager.getActiveGoal(factory).resourceType, RESOURCE_OXIDANT);
+        });
+
+        it('keeps a goal that is still producing, however long it takes', function () {
+            const { factory } = factoryRoom('A', {
+                level: 2,
+                factoryStore: { [RESOURCE_COMPOSITE]: 100000, [RESOURCE_ENERGY]: 100000 },
+                config: { enabled: true, goals: { [RESOURCE_OXIDANT]: 1000 }, batchSize: 1000, planningInterval: 1 },
+            });
+            for (Game.time = 1; Game.time <= 2 * PRODUCE_STALL; Game.time += PRODUCE_STALL - 1) {
+                factory.cooldown = 0;
+                FactoryManager.runAll();
+                factory.cooldown = PRODUCE_STALL;
+                FactoryManager.runAll();
+            }
+            assert.equal(FactoryManager.getActiveGoal(factory).resourceType, RESOURCE_OXIDANT);
+        });
+
+        it('does not count ticks the job did not run, as with a low bucket', function () {
+            const { factory } = factoryRoom('A', {
+                level: 0,
+                factoryStore: { [RESOURCE_COMPOSITE]: 20, [RESOURCE_ENERGY]: 100 },
+                config: { enabled: true, goals: { [RESOURCE_OXIDANT]: 10 }, batchSize: 10, planningInterval: 1 },
+            });
+            Game.time = 1;
+            FactoryManager.runAll();
+            Game.time = 2;
+            FactoryManager.runAll();
+            Game.time = 2 + PRODUCE_STALL + 100;
+            FactoryManager.runAll();
+            assert.equal(FactoryManager.getActiveGoal(factory).resourceType, RESOURCE_OXIDANT);
+        });
     });
 
     it('tracks partial batches and keeps the active root goal stable', function () {

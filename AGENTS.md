@@ -25,9 +25,11 @@ Key files:
 | `package.json` | Package metadata and the complete npm command surface: unit tests and type checking. |
 | `jsconfig.json` | Includes all JavaScript except `node_modules`; enables JavaScript input but sets `checkJs: false` and `noEmit: true`. |
 | `test/helpers/screeps.js` | Local Screeps globals, mocks, factories, and reset helpers. |
-| `.gitignore` | Ignores dependencies, editor workspaces, Screeps temporary files, logs, and `package-lock.json`. |
+| `package-lock.json` | Pins the development dependencies, so `npm ci` installs the same tools locally and in CI. |
+| `.github/workflows/ci.yml` | Runs `npm ci` and `npm test` on pushes to `master` and on pull requests. It validates only and uploads nothing. |
+| `.gitignore` | Ignores dependencies, editor workspaces, Screeps temporary files, and logs. |
 
-A local `package-lock.json` may be present, but it is ignored and not tracked. Do not assume a fresh checkout has it. No Node or npm version is pinned by an `engines` field.
+No Node or npm version is pinned by an `engines` field; CI uses Node 22.
 
 ## Install, test, and build commands
 
@@ -47,7 +49,7 @@ npm run typecheck
 
 There is **no compile, bundle, lint, format, watch, upload, or deployment script**. Root JavaScript files are the Screeps source files themselves; `test/syntax.test.js` also runs `node --check` on each of them.
 
-Although most files have `checkJs` disabled globally, `logistics.runner.js` opts in with `// @ts-check` and uses JSDoc types. Preserve that directive and keep its annotations valid.
+Although `checkJs` is disabled globally, `logistics.runner.js`, `main.scheduler.js`, `main.config.js`, and `main.constants.js` opt in with `// @ts-check` and use JSDoc types. Preserve that directive and keep their annotations valid.
 
 ## Main-loop architecture
 
@@ -67,14 +69,14 @@ Although most files have `checkJs` disabled globally, `logistics.runner.js` opts
 
 - **Game rules:** use the engine constant (`CREEP_SPAWN_TIME`, `HEAL_POWER`, `CONTROLLER_STRUCTURES`). Never restate one as a literal.
 - **Values that follow from game state:** derive them in `manager.economy.js`, such as creep counts from source output and distance.
-- **Energy the room may spend:** `EconomyManager.getSpendableEnergy(room)`, the one definition. Workers, labs and factories stop at `getEnergyReserve(room)`; hauling to the spawn, extensions and towers, recovery Harvesters, a controller close to downgrading, and rebuilding the only spawn do not.
+- **Energy the room may spend:** `EconomyManager.getSpendableEnergy(room)`, the one definition. Workers, labs and factories stop at `getEnergyReserve(room)`; hauling to the spawn, extensions and towers, recovery Harvesters, a controller close to downgrading, rebuilding the only spawn, and a Handyman while the room is at `DEFENDER_THREAT_LEVEL` do not.
 - **Tunable policy:** a named entry in `main.config.js`. Console settings (`setSetting`) are listed there too.
 - **Per-room overrides:** `room.memory`. Manual quotas raise what a room derives; `roleConfig[role].auto = false` or `base.autoDemand = false` turns derived demand off.
 
 ### Where state belongs
 
 - **Heap copy of Memory:** `main.memhack.js` means `Memory` is not re-parsed each tick, so a value JSON cannot hold (`undefined`, `Infinity`, an object with a prototype) keeps working until the next global reset and then changes. Store only what JSON can hold. Console commands are kept, but edits from the client's Memory panel are overwritten at the end of the tick.
-- **Per tick:** `MainCache`, including `MainCache.memo()` for derived values.
+- **Per tick:** `MainCache`, including `MainCache.memo()` for derived values, which can be cleared and worked out again, and `MainCache.tickRecord()` for running totals, which cannot. A memo read from a room's objects passes that room, so `invalidateRoom` clears only that room's memos; a spawn clears them all.
 - **Until a global reset:** `main.heap.js`, for plain data that can be rebuilt. Keep IDs, never game objects.
 - **Across resets:** `Memory`, only for what cannot be rebuilt. Avoid writing to it on every tick.
 
@@ -95,17 +97,17 @@ Although most files have `checkJs` disabled globally, `logistics.runner.js` opts
 | `main.info.js` | Console logging and per-room visual displays; stores room names, not live room objects, in log history. |
 | `main.constants.js` | Labels stored in Memory, such as link types. Tunable values are in `main.config.js`. |
 | `manager.base.js` | Defines the role registry, emergency recovery, adoption of creeps from lost bases, the per-tick CPU budget, the single spawn queue (local roles above missions, energy reservation, generic pre-spawn), declarative mission spawn providers, outsourced spawning, and boost-aware creep dispatch. Roles state their own demand through `getDemand()`. |
-| `manager.memory.js` | Initializes base/spawn/role and empire memory, removes dead-creep and stale visible-structure memory, and samples `RawMemory` size every 100 ticks. |
+| `manager.memory.js` | Initializes base/spawn/role and empire memory, removes dead-creep and stale visible-structure memory, drops bases lost for a whole prune interval (out of sight with no creep or spawn calling them home) and memory of spawns that no longer exist, and samples `RawMemory` size every 100 ticks. |
 | `manager.intel.js` | Normalizes bounded, versioned `Memory.empire` observations; expires stale intel while preserving active offscreen missions. |
 | `manager.remote.js` | Plans explicit remote missions, bounded route demand and ROI, exact spawn requests, suspension/blacklist metadata, and remote sites. |
-| `manager.factory.js` | Plans bounded goal-driven factory chains, recursive component imports, battery compression, cancellation, local logistics, and energy-reserve protection. |
+| `manager.factory.js` | Plans bounded goal-driven factory chains, recursive component imports, battery compression, cancellation, local logistics, and energy-reserve protection. A goal with no progress for `config.FACTORY` ticks is cancelled and skipped for a while, so the next goal can run. |
 | `manager.mineral.js` | Checks RCL 6+ mineral/extractor readiness, regeneration, cooldown, and storage/terminal capacity for automatic capped mining demand. |
 | `manager.director.js` | The strategic layer: one Goal per room, Missions it starts, and a frozen per-room Plan of overrides on the heap. Only the goal is in Memory. **Not in the job table yet, and no manager reads its plan**, so it has no effect on the game. |
 | `manager.lab.js` | Dynamically assigns source/output labs, runs the idle/select/acquire/react goal lifecycle, plans bounded reaction chains and terminal imports, and coordinates opt-in spawn boost reservations, pre-loading, and post-spawn boosting. |
 | `lab.matrix.js` | Ranks what a room's labs should make next: boost demand seen at the spawn preflight, manual goals, then opt-in market profit. Reads and ranks only; `manager.lab.js` issues every order. |
 | `manager.logistics.js` | Persistent per-room task queue, request generation, endpoint refresh, claims, partial-delivery reconciliation, exact lab transport, boost-reserve protection, and dynamic hauler demand. |
 | `manager.terminal.js` | Bounded cross-room resource requests, owned-room balancing, reserve/fee accounting, cooldown-safe sends, and terminal stock positioning. |
-| `manager.market.js` | Explicitly enabled existing-order buying/selling with price/credit/fee limits, deal caps, failure backoff, and bounded history. |
+| `manager.market.js` | Explicitly enabled existing-order buying/selling with price/credit/fee limits, deal caps, failure backoff, and bounded history. A sell rule without both `max` and `minSellPrice` does not sell. |
 | `logistics.runner.js` | Executes a claimed task for Storekeepers and Couriers: pickup, delivery, retry backoff, and foreign-resource recovery. |
 | `manager.defense.js` | Scores hostile bodies and proximity, selects a primary target, requests defenders, rate-limits notifications, and evaluates last-resort safe mode. |
 | `manager.tower.js` | Executes the shared tower attack plan; otherwise heals friendly creeps or performs emergency repairs while respecting energy reserves. |
@@ -172,7 +174,7 @@ Storekeepers accept only energy tasks; Couriers accept any resource. A hauler lo
 
 ### Construction and defense safeguards
 
-Mayor defaults to automatic operation but supports `off`, `warn`, and `auto` modes. With `enableFortification` on, RCL 4 or higher, and a healthy bucket, the room plans one minimum-cut rampart line around its buildings (`roomManager.rampartPlanVersion`) and builds it after everything else. Nuker construction and wall/rampart fortification are explicitly opt-in through `room.memory.mayor`. Layout generation overwrites the existing editable layout. A power spawn and observer are only built with `enablePowerSpawn` and `enableObserver`, because no code uses them yet.
+Mayor defaults to automatic operation but supports `off`, `warn`, and `auto` modes. With `enableFortification` on, RCL 4 or higher, and a healthy bucket, the room plans one minimum-cut rampart line around its buildings (`roomManager.rampartPlanVersion`) and builds it after everything else. Nuker construction and wall/rampart fortification are explicitly opt-in through `room.memory.mayor`. Layout generation overwrites the existing editable layout. A saved layout follows what stands: buildings and sites claim their tiles, and unbuilt tiles over the RCL 8 limit, or a terminal or factory planned away from every storage, are planned again. A power spawn and observer are only built with `enablePowerSpawn` and `enableObserver`, because no code uses them yet.
 
 Defense and towers share `DefenseManager.getPriorityTarget()` / `getTowerPlan()`. Keep target selection, healing estimates, per-room notification throttling, tower energy reserves, and safe-mode vulnerability checks coordinated rather than reimplementing them independently.
 
@@ -181,7 +183,7 @@ Defense and towers share `DefenseManager.getPriorityTarget()` / `getTowerPlan()`
 - Match the surrounding file. The codebase mixes older tab-indented/`var` modules with newer four-space/`const` code; there is no configured formatter or linter to impose a new style.
 - Keep the existing flat naming scheme: `manager.<name>.js`, `role.<name>.js`, and root-level support modules. Use extensionless local CommonJS imports as the current files do.
 - Managers commonly expose static `runAll()` methods and create per-room instances. Add new roles through `BaseManager.fetchAllRoles()` rather than creating a parallel dispatch path.
-- Follow existing Screeps result-code handling (`OK`, `ERR_NOT_IN_RANGE`, and related constants) and debug logging. Exception boundaries report through `MainInfo.failure()`, which limits how often one problem logs and emails and never throws itself.
+- Follow existing Screeps result-code handling (`OK`, `ERR_NOT_IN_RANGE`, and related constants) and debug logging. Exception boundaries report through `MainInfo.failure()`, which limits how often one problem logs and emails and never throws itself. Send any other email through `MainInfo.sendEmail()`, never `Game.notify` directly: the game drops calls past 20 in a tick, and the rest wait for the next tick.
 - Use `MainCache`/`MainUtil` collection helpers where their per-tick behavior is intended, and keep CPU/memory bounds in mind for room-wide scans and serialized data.
 - Do not add production imports from `node_modules` without also establishing how those modules would reach the Screeps runtime; no bundling mechanism currently exists.
 - Update comments, `README.md`, or `TODO.md` when a change makes their behavior or implementation status stale. Do not mark roadmap items implemented merely because a structure can be placed or hauled.
@@ -217,6 +219,7 @@ Tests are local Mocha tests using Node assertions; they do not connect to a Scre
 - `test/reserve.regression.test.js`: the energy reserve: who stops at it, who does not, what workers leave to the haulers, creep demand, and the one definition shared with the terminal and Director.
 - `test/recovery.regression.test.js`: destroyed sources, stale hauler claims, outsourced spawning, lost bases, the per-tick CPU budget, emails, and remote accounting.
 - `test/priority.regression.test.js`: threat scoring, tower reserves, task order, spawn timing and placement limits.
+- `test/liveroom.regression.test.js`: the real managers on a snapshot of the live room (`test/fixtures/W13S14.json`, loaded by `test/helpers/liveroom.js`): Miner posts against where the live Miners stand, derived demand, the layout on real terrain, ramparts, logistics, and Memory pruning. Refresh the snapshot with `SCREEPS_TOKEN=<token> node test/fixtures/fetch-live-room.js`; never commit a token.
 - `test/syntax.test.js`: syntax-checks every root-level `.js` file.
 
 Use `test/helpers/screeps.js` for new tests. For multi-tick tests, call `rebuildGameObjects()` between ticks and fetch objects from `Game` again afterwards; it does what the engine does, and old instances throw when read. Call `resetScreeps()` before each case, normally in `beforeEach`, to install globals and reset `Game`, `Memory`, and `MainCache`. Build rooms/objects with `makeRoom`, `makeStructure`, `makeCreep`, `makeSpawn`, `makeStore`, and `makeLab`; populate `room.find` results with `setFind`; and call `registerObject` for anything that must be reachable through `Game.getObjectById`. The helper loads the engine's real constants from `test/helpers/engine-constants.js`, so tests cannot agree with a wrong idea of the game. The mocks still apply actions at once instead of at the end of the tick, have flat terrain, and never move creeps on their own. `test/helpers/simulator.js` builds on them for long runs: walking under fatigue, spawning and dying, source regeneration, and the engine's lazy `Memory`. Its header lists what it leaves out; its CPU figures show trends and cannot stand in for a live shard.
@@ -225,7 +228,7 @@ The mocks implement only the Screeps behavior currently needed by the suite. Ext
 
 ## Deployment and in-game operation
 
-No automated deployment process or CI configuration is present in this repository. The npm commands validate code only; they do not upload it. Deployment is handled outside the repository by the user's Screeps script/client setup, so do not invent an upload command or assume that running tests changed a live shard. Live verification requires the external Screeps environment.
+No automated deployment process is present in this repository. The npm commands and CI validate code only; they do not upload it. Deployment is handled outside the repository by the user's Screeps script/client setup, so do not invent an upload command or assume that running tests changed a live shard. Live verification requires the external Screeps environment.
 
 `main.js` installs global helpers for the in-game console:
 

@@ -1,7 +1,9 @@
 var MainCache = require('./main.cache');
+var MainHeap = require('./main.heap');
 var MainUtil = require('./main.util');
 var TerminalManager = require('./manager.terminal');
 var info = require('./main.info');
+var policy = require('./main.config').FACTORY;
 
 class FactoryManager {
 
@@ -36,6 +38,7 @@ class FactoryManager {
             planningInterval: 10,
             requestExpiry: 1000,
             priority: 70,
+            blocked: {},
         };
         var config = Object.assign(defaults, room.memory.factory || {});
         config.enabled = config.enabled !== false;
@@ -102,7 +105,9 @@ class FactoryManager {
             if (memory.activeGoal && memory.managed) {
                 if (Game.time >= (memory.nextPlanningAt || 0)) this._updateRequests(factory, memory, memory.activeGoal);
                 this._updateActiveMetadata(factory, memory, memory.activeGoal);
+                this._creditSkippedTicks(factory, memory.activeGoal);
                 this._produceActive(factory, memory);
+                if (memory.activeGoal && this._isStalled(memory.activeGoal)) this._blockGoal(factory, memory);
                 return;
             }
             if (assigned.size >= this._config.maxGoals || Game.time < (memory.nextPlanningAt || 0)) return;
@@ -115,9 +120,45 @@ class FactoryManager {
         });
     }
 
+    // A goal cannot make progress while this job does not run, as with a low bucket.
+    _creditSkippedTicks(factory, goal) {
+        var lastRuns = MainHeap.namespace('factoryLastRun');
+        var last = lastRuns[factory.id];
+        lastRuns[factory.id] = Game.time;
+        if (last !== undefined && Game.time - last > 1 && goal.progressAt !== undefined) goal.progressAt += Game.time - last - 1;
+    }
+
+    // Keeps a high-water mark, so an amount that rises and falls back does not reset the clock.
+    _isStalled(goal) {
+        var progress = goal.steps.reduce((sum, step) => sum + step.produced, 0);
+        Object.keys(goal.pendingComponents).forEach(resourceType => progress -= goal.pendingComponents[resourceType]);
+        // a goal already in memory carries on, and counts as stalled only from now
+        if (goal.progressAt === undefined || progress > goal.progress) {
+            goal.progress = progress;
+            goal.progressAt = Game.time;
+            return false;
+        }
+        var waiting = Object.keys(goal.pendingComponents).length > 0;
+        return Game.time - goal.progressAt > (waiting ? policy.IMPORT_TIMEOUT : policy.PRODUCE_STALL);
+    }
+
+    // Skipped for a while, so that one goal nothing can finish does not hold up the others.
+    _blockGoal(factory, memory) {
+        var goal = memory.activeGoal;
+        var reason = Object.keys(goal.pendingComponents).length > 0 ? 'imports did not arrive' : 'could not produce';
+        this._config.blocked[goal.resourceType] = Game.time + policy.BLOCK_TICKS;
+        info.warning('Factory ' + factory.id + ' gave up on ' + goal.resourceType + ': ' + reason, this._room);
+        this._cancelGoal(factory, memory, reason);
+    }
+
     _selectGoal(assigned) {
+        var blocked = this._config.blocked;
+        Object.keys(blocked).forEach(resourceType => {
+            if (blocked[resourceType] <= Game.time) delete blocked[resourceType];
+        });
         return Object.keys(this._goals).sort().find(resourceType => {
-            return !assigned.has(resourceType) && FactoryManager._getRoomStock(this._room, resourceType) < this._goals[resourceType] &&
+            return !assigned.has(resourceType) && !blocked[resourceType] &&
+                FactoryManager._getRoomStock(this._room, resourceType) < this._goals[resourceType] &&
                 !!FactoryManager.getRecipe(resourceType);
         }) || null;
     }

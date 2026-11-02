@@ -16,17 +16,37 @@ class MainCache {
 			reservedSpawns: new Set(),
 			roomFinds: new Map(),
 			memos: new Map(),
+			roomMemos: new Map(),
+			tickRecords: new Map(),
 		};
 	}
 
 	/*
-	 * Computes a value once per tick. Use it for derived values that many callers ask for.
+	 * Computes a value once per tick. Use it for derived values that many callers ask for. A value
+	 * read from a room's objects names that room, so a change there clears only that room's values.
 	 */
 
-	static memo(key, compute) {
-		var memos = this._getState().memos;
+	static memo(key, compute, room) {
+		var memos = room ? this._getRoomMemos(room) : this._getState().memos;
 		if (!memos.has(key)) memos.set(key, compute());
 		return memos.get(key);
+	}
+
+	static _getRoomMemos(room) {
+		var roomMemos = this._getState().roomMemos;
+		if (!roomMemos.has(room.name)) roomMemos.set(room.name, new Map());
+		return roomMemos.get(room.name);
+	}
+
+	/*
+	 * A running record for this tick. Unlike a memo it cannot be worked out again, so nothing clears
+	 * it before the tick ends.
+	 */
+
+	static tickRecord(key, create) {
+		var records = this._getState().tickRecords;
+		if (!records.has(key)) records.set(key, create());
+		return records.get(key);
 	}
 
 	static _getState() {
@@ -133,7 +153,7 @@ class MainCache {
 
 	static invalidateRoom(room, findType) {
 		var state = this._getState();
-		state.memos.clear();
+		state.roomMemos.delete(room.name);
 		if (!state.roomFinds.has(room.name)) {
 			return;
 		}
@@ -152,6 +172,7 @@ class MainCache {
 		var state = this._getState();
 		state.reservedSpawns.add(spawn.name);
 		state.memos.clear();
+		state.roomMemos.clear();
 		state.freeSpawns = new Map();
 		state.creepsByHome = null;
 		state.creepCounts = null;

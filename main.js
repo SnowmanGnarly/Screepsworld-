@@ -41,6 +41,7 @@ var allRoles = null;
 const JOBS = [
     { name: 'initRound()', run: () => MemoryManager.initRound(allRoles) },
     { name: 'MainCache', run: () => MainCache.initRound(allRoles) },
+    { name: 'Notifications', run: () => MainInfo.flushNotifications() },
     { name: 'IntelManager', tier: CpuManager.TIER_DEGRADED, run: () => IntelManager.runAll() },
     { name: 'RemoteManager', tier: CpuManager.TIER_DEGRADED, run: () => RemoteManager.runAll(CpuManager.shouldRunDeferred()) },
     { name: 'DefenseManager', run: () => DefenseManager.runAll() },

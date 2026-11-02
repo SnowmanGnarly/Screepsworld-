@@ -101,8 +101,10 @@ class RoomManager {
 
 		if (this._memory.layout) {
 			this._array.fromCompactString(this._memory.layout, { emptyValue: ' ' });
+			var adopted = this._adoptStandingBuildings(this._array);
+			if (adopted.wall) delete this._memory.rampartPlanVersion; // the wall was drawn around the old plan
 			// layouts saved before the full plan was stored only hold the tiles allowed at that RCL
-			if (this._memory.planVersion !== RoomManager.PLAN_VERSION) {
+			if (adopted.changed || this._memory.planVersion !== RoomManager.PLAN_VERSION) {
 				this._generateStructuresToBeBuild(this._array);
 				this._memory.layout = this._array.toCompactString();
 			}
@@ -114,6 +116,74 @@ class RoomManager {
 		if (this._memory.debug) {
 			this._printRoom(this._array);
 		}
+	}
+
+	/*
+	 * A saved plan can be older than what stands in the room, such as a storage built off the plan.
+	 * What stands wins: its tile takes its character. An unbuilt tile over the RCL 8 limit goes,
+	 * farthest from the spawn first, and so does an unbuilt terminal or factory planned away from
+	 * every storage. The top-up then plans those again beside the real storage, or, where no tile
+	 * there is free, leaves them to the Mayor's placement rules, which build them beside it.
+	 *
+	 * Returns whether the plan changed, and whether the rampart line has to be searched again: it
+	 * does not protect links or the extractor, so those alone do not count.
+	 */
+
+	_adoptStandingBuildings(array) {
+		var tiles = RoomManager.TILES_TO_BE_BUILD;
+		var result = { changed: false, wall: false };
+		var note = character => {
+			result.changed = true;
+			if (character !== RoomManager.TILE_LINK && character !== RoomManager.TILE_EXTRACTOR) result.wall = true;
+		};
+		var characters = new Set(tiles.map(tile => tile.character));
+		var taken = new Set();
+		var standingStorages = [];
+		MainCache.find(this._room, FIND_MY_STRUCTURES).concat(MainCache.find(this._room, FIND_MY_CONSTRUCTION_SITES)).forEach(object => {
+			var tile = tiles.find(candidate => candidate.structureType === object.structureType);
+			if (!tile) return;
+			taken.add(object.pos.x + ',' + object.pos.y);
+			if (tile.character === RoomManager.TILE_STORAGE) standingStorages.push(object.pos);
+			var previous = array.get(object.pos.x, object.pos.y);
+			if (previous === tile.character) return;
+			array.set(object.pos.x, object.pos.y, tile.character);
+			note(tile.character);
+			if (characters.has(previous)) note(previous);
+		});
+
+		// one pass over the room, since this runs on every Mayor visit
+		var counts = {};
+		var unbuilt = {};
+		for (var x = 0; x < array.width; x++) {
+			for (var y = 0; y < array.height; y++) {
+				var character = array.get(x, y);
+				if (!characters.has(character)) continue;
+				counts[character] = (counts[character] || 0) + 1;
+				if (!taken.has(x + ',' + y)) (unbuilt[character] = unbuilt[character] || []).push({ x: x, y: y });
+			}
+		}
+		var clear = (position, character) => {
+			var terrain = this._room.getTerrain().get(position.x, position.y);
+			array.set(position.x, position.y, terrain === TERRAIN_MASK_SWAMP ? RoomManager.TILE_TERRAIN_SWAMP : RoomManager.TILE_TERRAIN_PLAIN);
+			note(character);
+		};
+		var range = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+		var spawn = MainCache.find(this._room, FIND_MY_SPAWNS)[0];
+		tiles.forEach(tile => {
+			var limits = CONTROLLER_STRUCTURES[tile.structureType];
+			if (!limits) return;
+			var surplus = (counts[tile.character] || 0) - (limits[config.MAX_RCL] || 0);
+			if (surplus <= 0) return;
+			var candidates = unbuilt[tile.character] || [];
+			if (spawn) candidates.sort((a, b) => range(b, spawn.pos) - range(a, spawn.pos));
+			candidates.splice(0, surplus).forEach(position => clear(position, tile.character));
+		});
+		var storages = standingStorages.concat(unbuilt[RoomManager.TILE_STORAGE] || []);
+		[RoomManager.TILE_TERMINAL, RoomManager.TILE_FACTORY].forEach(character => {
+			(unbuilt[character] || []).filter(position => !storages.some(storage => range(storage, position) <= 2))
+				.forEach(position => clear(position, character));
+		});
+		return result;
 	}
 
 	_generateLayout(array = new TileArray(50, 50)) {

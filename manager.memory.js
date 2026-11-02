@@ -205,7 +205,7 @@ class MemoryManager {
 		if (Game.time % config.MEMORY.MEASURE_INTERVAL !== 0 || typeof RawMemory === 'undefined' || !RawMemory.get || this._memoryMeasuredAt === Game.time) return;
 		this._memoryMeasuredAt = Game.time;
 		this._memorySize = RawMemory.get().length;
-		if (this._memorySize > 1500000 && (!this._lastMemoryWarning || Game.time - this._lastMemoryWarning > 500)) {
+		if (this._memorySize > config.MEMORY.SIZE_WARNING_BYTES && (!this._lastMemoryWarning || Game.time - this._lastMemoryWarning > config.MEMORY.SIZE_WARNING_PAUSE)) {
 			this._lastMemoryWarning = Game.time;
 			info.warning('Serialized memory is approaching the configured limit: ' + this._memorySize + ' bytes.');
 		}
@@ -256,14 +256,16 @@ class MemoryManager {
 		// Miners now go through the spawn queue like every other role
 		delete Memory.minerReplacements;
 		IntelManager.ensureMemory();
-		IntelManager.cleanup();
+		if (Game.time % config.MEMORY.INTEL_CLEANUP_INTERVAL === config.MEMORY.INTEL_CLEANUP_PHASE) IntelManager.cleanup();
 		if (Game.time % config.MEMORY.ROOM_PRUNE_INTERVAL === config.MEMORY.ROOM_PRUNE_PHASE) this._pruneRoomMemory();
 		if (Game.time % config.MEMORY.STUCK_PRUNE_INTERVAL === config.MEMORY.STUCK_PRUNE_PHASE) MainMove.prune();
 	}
 
 	/*
 	 * Every room we ever saw keeps a Memory entry, and nothing else removes it. An entry can go
-	 * when the room is out of sight, is not a base and takes no part in a mission.
+	 * when the room is out of sight and takes no part in a mission. A room we own is always in
+	 * sight, so a base out of sight was lost, for example to a respawn. It goes once a whole prune
+	 * interval has passed with no creep or spawn calling it home, since its creeps are adopted.
 	 */
 
 	static _pruneRoomMemory() {
@@ -275,11 +277,24 @@ class MemoryManager {
 				if (name) missionRooms.add(name);
 			});
 		});
+		// a respawn can give the new base the old one's name, and then its creeps keep nothing alive
+		var liveBases = new Set(Object.values(Game.rooms).filter(room => room.memory && room.memory.base).map(room => room.memory.base.name));
+		var homes = new Set(Object.values(Game.creeps).concat(Object.values(Game.spawns)).map(object => object.memory && object.memory.home)
+			.filter(home => !liveBases.has(home)));
 		Object.keys(Memory.rooms).forEach(name => {
 			var memory = Memory.rooms[name];
-			if (Game.rooms[name] || missionRooms.has(name) || (memory && memory.base)) return;
+			if (Game.rooms[name] || missionRooms.has(name)) {
+				if (memory && memory.base) delete memory.base.lostSince;
+				return;
+			}
+			if (memory && memory.base && !this._isLostBase(memory.base, homes)) return;
 			delete Memory.rooms[name];
 		});
+		if (Memory.spawns) {
+			Object.keys(Memory.spawns).forEach(name => {
+				if (!Game.spawns[name]) delete Memory.spawns[name];
+			});
+		}
 		if (!Memory.structures) return;
 		Object.keys(Memory.structures).forEach(id => {
 			var roomName = Memory.structures[id] && Memory.structures[id]._roomName;
@@ -287,6 +302,15 @@ class MemoryManager {
 				delete Memory.structures[id];
 			}
 		});
+	}
+
+	static _isLostBase(base, homes) {
+		if (homes.has(base.name)) {
+			delete base.lostSince;
+			return false;
+		}
+		if (base.lostSince === undefined) base.lostSince = Game.time;
+		return Game.time - base.lostSince >= config.MEMORY.ROOM_PRUNE_INTERVAL;
 	}
 
 };

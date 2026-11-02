@@ -4,6 +4,7 @@ const {
 } = require('./helpers/screeps');
 const MayorManager = require('../manager.mayor');
 const RoomManager = require('../manager.room');
+const MainCache = require('../main.cache');
 const TileArray = require('../tile.array');
 const constants = require('../main.constants');
 
@@ -139,5 +140,78 @@ describe('RCL placement regressions', function () {
         mayor._buildStructureAtPosition(position, { structureType: STRUCTURE_TOWER });
         assert.equal(mayor._isPositionBuildable(position), false);
         assert.equal(room.createdSites.length, 1);
+    });
+});
+
+describe('Saved layouts that fall behind the room', function () {
+    beforeEach(function () {
+        resetScreeps();
+    });
+
+    function plannedAt(manager, character) {
+        const found = [];
+        for (let x = 0; x < 50; x++) {
+            for (let y = 0; y < 50; y++) {
+                if (manager._array.get(x, y) === character) found.push({ x, y });
+            }
+        }
+        return found;
+    }
+
+    it('gives up the planned extension farthest from the spawn when one is built off the plan', function () {
+        const room = plannerRoom(6);
+        const spawn = makeStructure(room, STRUCTURE_SPAWN, { id: 'spawn', pos: makePosition(room, 25, 25), extra: { my: true } });
+        setFind(room, FIND_MY_SPAWNS, [spawn]);
+        setFind(room, FIND_STRUCTURES, [spawn]);
+        setFind(room, FIND_MY_STRUCTURES, [spawn]);
+        RoomManager.generateLayoutForRoom(room);
+        const before = new RoomManager(room);
+        before._initArrayIfNecessary();
+        const range = tile => Math.max(Math.abs(tile.x - 25), Math.abs(tile.y - 25));
+        const planned = plannedAt(before, RoomManager.TILE_EXTENSION);
+        const farthest = Math.max(...planned.map(range));
+        // an open tile the plan does not use, on the other checkerboard colour
+        let free = null;
+        for (let x = 30; x < 40 && !free; x++) {
+            for (let y = 30; y < 40 && !free; y++) {
+                if (before._array.get(x, y) === RoomManager.TILE_TERRAIN_PLAIN) free = { x, y };
+            }
+        }
+        const site = { id: 'extension-site', room, pos: makePosition(room, free.x, free.y), structureType: STRUCTURE_EXTENSION, my: true };
+        setFind(room, FIND_MY_CONSTRUCTION_SITES, [site]);
+        MainCache.initRound([]);
+        const after = new RoomManager(room);
+        after._initArrayIfNecessary();
+        const kept = plannedAt(after, RoomManager.TILE_EXTENSION);
+        assert.equal(kept.length, planned.length);
+        assert.equal(after._array.get(free.x, free.y), RoomManager.TILE_EXTENSION);
+        const lost = planned.filter(tile => !kept.some(other => other.x === tile.x && other.y === tile.y));
+        assert.equal(lost.length, 1);
+        assert.equal(range(lost[0]), farthest);
+    });
+
+    it('plans the terminal and factory again beside a storage built off the plan', function () {
+        const room = plannerRoom(6);
+        const spawn = makeStructure(room, STRUCTURE_SPAWN, { id: 'spawn', pos: makePosition(room, 25, 25), extra: { my: true } });
+        setFind(room, FIND_MY_SPAWNS, [spawn]);
+        setFind(room, FIND_STRUCTURES, [spawn]);
+        setFind(room, FIND_MY_STRUCTURES, [spawn]);
+        RoomManager.generateLayoutForRoom(room);
+        const before = new RoomManager(room);
+        before._initArrayIfNecessary();
+        assert.equal(plannedAt(before, RoomManager.TILE_TERMINAL).length, 1, 'the first plan holds a terminal');
+
+        const storage = makeStructure(room, STRUCTURE_STORAGE, { id: 'storage', pos: makePosition(room, 12, 12), extra: { my: true } });
+        setFind(room, FIND_STRUCTURES, [spawn, storage]);
+        setFind(room, FIND_MY_STRUCTURES, [spawn, storage]);
+        MainCache.initRound([]);
+        const after = new RoomManager(room);
+        after._initArrayIfNecessary();
+        assert.deepEqual(plannedAt(after, RoomManager.TILE_STORAGE), [{ x: 12, y: 12 }]);
+        [RoomManager.TILE_TERMINAL, RoomManager.TILE_FACTORY].forEach(character => {
+            const tiles = plannedAt(after, character);
+            assert.equal(tiles.length, 1, character);
+            assert.ok(Math.max(Math.abs(tiles[0].x - 12), Math.abs(tiles[0].y - 12)) <= 2, character + ' at ' + JSON.stringify(tiles[0]));
+        });
     });
 });

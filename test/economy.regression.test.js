@@ -357,4 +357,69 @@ describe('Terminal and market economy regressions', function () {
         assert.equal(Game.market.deals.length, 0);
         assert.equal(Game.market.orders['energy-order'].amount, 500);
     });
+
+    [
+        ['a stock line', { minSellPrice: 2 }],
+        ['a price floor', { max: 100, sellTo: 100 }],
+    ].forEach(([missing, limits]) => {
+        it('does not sell under a rule with no ' + missing, function () {
+            ownedRoom('A', {
+                emergencyReserve: 0,
+                terminal: { [RESOURCE_OXYGEN]: 1000, [RESOURCE_ENERGY]: 1000 },
+                terminalConfig: { enabled: true, emergencyReserve: 0, batchSize: 400, cooldown: 0, resources: {} },
+                marketConfig: {
+                    enabled: true, sell: true,
+                    resources: { [RESOURCE_OXYGEN]: Object.assign({ sell: true, min: 0, target: 0 }, limits) },
+                },
+            });
+            addOrder('oxygen-order', ORDER_BUY, RESOURCE_OXYGEN, 3, 400, 'X');
+            MarketManager.runAll(true);
+            assert.equal(Game.market.deals.length, 0);
+        });
+    });
+
+    describe('positioning for a pending deal', function () {
+        function pendingSale(terminalResources) {
+            const setup = ownedRoom('A', {
+                storage: { [RESOURCE_ENERGY]: 5000 },
+                terminal: { [RESOURCE_OXYGEN]: 1000 },
+                terminalConfig: { enabled: true, emergencyReserve: 0, batchSize: 400, cooldown: 0, resources: terminalResources },
+                marketConfig: {
+                    enabled: true, sell: true, batchSize: 400,
+                    resources: { [RESOURCE_OXYGEN]: { sell: true, min: 0, target: 0, max: 100, sellTo: 100, minSellPrice: 1, batchSize: 400 } },
+                },
+            });
+            addOrder('oxygen-order', ORDER_BUY, RESOURCE_OXYGEN, 3, 400, 'X');
+            Game.market.calcTransactionCost = () => 50;
+            return setup;
+        }
+
+        const runTick = () => {
+            TerminalManager.runAll();
+            MarketManager.runAll(true);
+        };
+
+        it('brings the fee to the terminal despite the idle rule for energy, tick after tick', function () {
+            const { room } = pendingSale({ [RESOURCE_ENERGY]: { min: 0, target: 0, max: 0, reserve: 0 } });
+            for (let tick = 0; tick < 3; tick++) {
+                runTick();
+                Game.time++;
+                assert.ok(room.memory.market.pending, 'the deal waits for its fee');
+                assert.equal(room.memory.logistics.terminalStockPolicy[RESOURCE_ENERGY].min, 50);
+            }
+        });
+
+        it('does not take energy from a terminal request that is being served', function () {
+            const { room } = pendingSale({ [RESOURCE_ENERGY]: { min: 0, target: 0, max: 0, reserve: 0 } });
+            TerminalManager.setPositioningRule(room, RESOURCE_ENERGY, 800, 800, 40, true);
+            assert.equal(TerminalManager.setPositioningRule(room, RESOURCE_ENERGY, 50, 50, 30, false).min, 800);
+        });
+
+        it('is not blocked by a rule that a finished request left behind', function () {
+            const { room } = pendingSale({});
+            TerminalManager.setPositioningRule(room, RESOURCE_OXYGEN, 2000, 2000, 70, true);
+            runTick();
+            assert.equal(room.memory.logistics.terminalStockPolicy[RESOURCE_OXYGEN].min, 400);
+        });
+    });
 });

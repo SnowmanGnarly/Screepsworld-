@@ -365,7 +365,9 @@ class MayorManager {
 			var sources = MainCache.find(this._room, FIND_SOURCES);
 			for (var s = 0; s < sources.length; s++) {
 				if (!this._hasLinkRoleNear(links, sources[s].pos, constants.LINK_TYPE_SOURCE)) {
-					return this._placeSourceLink(sources[s]);
+					// a source with no tile for its link must not cost the others theirs
+					var sourceLink = this._placeSourceLink(sources[s]);
+					if (sourceLink) return sourceLink;
 				}
 			}
 			if (this._room.controller && !this._hasLinkRoleNear(links, this._room.controller.pos, constants.LINK_TYPE_TARGET)) {

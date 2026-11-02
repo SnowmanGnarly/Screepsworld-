@@ -211,6 +211,22 @@ describe('Energy that reaches the room', function () {
             const position = new MayorManager(room)._findSmartPlacementPosition(STRUCTURE_LINK);
             assert.ok(position.inRangeTo(room.controller.pos, 2));
         });
+
+        it('moves on when a source has no tile for its link, so the other links still get built', function () {
+            linkLimits();
+            const { room } = homeRoom({ level: 7 });
+            addSource(room, 's1', 10, 10);
+            const second = addSource(room, 's2', 30, 10);
+            const storage = addStorage(room, 25, 40, 1000);
+            addLink(room, constants.LINK_TYPE_TARGET, storage.pos.x + 1, storage.pos.y + 1);
+            MainCache.initRound([]);
+            const mayor = new MayorManager(room);
+            const placeSourceLink = mayor._placeSourceLink.bind(mayor);
+            mayor._placeSourceLink = source => source.id === 's1' ? null : placeSourceLink(source);
+            assert.ok(mayor._findSmartPlacementPosition(STRUCTURE_LINK).inRangeTo(second.pos, 2));
+            mayor._placeSourceLink = () => null;
+            assert.ok(mayor._findSmartPlacementPosition(STRUCTURE_LINK).inRangeTo(room.controller.pos, 2));
+        });
     });
 
     describe('spending what is mined', function () {

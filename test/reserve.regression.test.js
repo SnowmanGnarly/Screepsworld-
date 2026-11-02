@@ -106,6 +106,74 @@ describe('Energy reserve', function () {
             Game.time++;
             assert.equal(EconomyManager.getSpendableEnergy(room), 500, 'and starts over on the next one');
         });
+
+        it('keeps counting after a pickup, a new site or a spawn clears the cached values mid-tick', function () {
+            const { room } = makeBase({ stored: RESERVE + 500 });
+            EconomyManager.noteWorkerWithdrawal(room, 200);
+            MainCache.invalidateRoom(room, FIND_DROPPED_RESOURCES);
+            assert.equal(EconomyManager.getSpendableEnergy(room), 300, 'after a pickup');
+            MainCache.invalidateRoom(room, FIND_CONSTRUCTION_SITES);
+            assert.equal(EconomyManager.getSpendableEnergy(room), 300, 'after a new site');
+            MainCache.recordSpawn(null, { name: 'Spawn1', room });
+            assert.equal(EconomyManager.getSpendableEnergy(room), 300, 'after a spawn');
+        });
+    });
+
+    describe('repairs during an attack', function () {
+        function besieged(threatLevel) {
+            const setup = makeBase({ stored: RESERVE - 1000 });
+            setup.place(STRUCTURE_RAMPART, 'rampart', 25, 25, 0, 0, { hits: 100, hitsMax: 1000000 });
+            setFind(setup.room, FIND_HOSTILE_CREEPS, []);
+            setup.room.memory.defense = { threatLevel };
+            return setup;
+        }
+
+        it('spawns a Handyman below the reserve only once the room is under real threat', function () {
+            const handyman = new Handyman();
+            assert.equal(handyman.getDemand(besieged(1).room), 0);
+            assert.equal(handyman.getDemand(besieged(config.DEFENSE.DEFENDER_THREAT_LEVEL).room), 1);
+        });
+
+        it('lets it draw on the reserve, since the walls are what the reserve is for', function () {
+            const { room } = besieged(config.DEFENSE.DEFENDER_THREAT_LEVEL);
+            const handyman = new Handyman();
+            handyman._baseRoom = room;
+            const creep = worker(room, 'Handyman');
+            assert.equal(handyman._withdrawFrom(creep, room.storage), OK);
+            assert.ok(carried(creep) > 0);
+        });
+
+        it('leaves the other workers at the reserve', function () {
+            const { room } = besieged(config.DEFENSE.DEFENDER_THREAT_LEVEL);
+            assert.equal(new Upgrader()._mayDrawReserve(room), false);
+            assert.equal(new Builder()._mayDrawReserve(room), false);
+        });
+    });
+
+    describe('cached values', function () {
+        it('clears only the room that changed', function () {
+            const here = makeRoom('W1N1');
+            const there = makeRoom('W2N2');
+            let computed = 0;
+            const read = room => MainCache.memo('value', () => ++computed, room);
+            read(here);
+            read(there);
+            MainCache.invalidateRoom(here, FIND_DROPPED_RESOURCES);
+            read(there);
+            assert.equal(computed, 2, 'the other room keeps its value');
+            read(here);
+            assert.equal(computed, 3, 'the room that changed works it out again');
+        });
+
+        it('clears every room after a spawn, since creep counts are not per room', function () {
+            const room = makeRoom('W1N1');
+            let computed = 0;
+            const read = () => MainCache.memo('value', () => ++computed, room);
+            read();
+            MainCache.recordSpawn(null, { name: 'Spawn1', room });
+            read();
+            assert.equal(computed, 2);
+        });
     });
 
     describe('workers at the reserve', function () {

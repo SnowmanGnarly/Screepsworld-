@@ -60,7 +60,7 @@ room.memory.lab = {
 
 With `required: false`, a creep spawns unboosted if the compound isn't ready. With `required: true`, the spawn waits while haulers load the lab, so keep it off roles you need urgently. Add `autoProfit: true` to also make products your market sell rules allow.
 
-**Market.** Fills existing orders only; it never creates public orders. Limits on price, credits, and deals are enforced:
+**Market.** Fills existing orders only; it never creates public orders. Limits on price, credits, and deals are enforced. A sell rule needs both `max` and `minSellPrice`, and a rule missing either does not sell:
 
 ```javascript
 room.memory.market = {
@@ -179,7 +179,7 @@ npx mocha "test/logistics.regression.test.js"   # one suite
 
 ## Deployment
 
-The repository has no upload script or CI, and the npm commands don't upload anything. Deploy with your own client or tool, then check with `version()`.
+The repository has no upload script, and neither the npm commands nor CI (`npm ci && npm test` on GitHub) upload anything. Deploy with your own client or tool, then check with `version()`.
 
 ## Known limitations
 

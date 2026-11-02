@@ -95,6 +95,29 @@ describe('Defense reliability regressions', function () {
         assert.equal(room.controller.activations, 1);
     });
 
+    it('still emails the Safe Mode activation, at once, in a tick that already used up the game\'s email limit', function () {
+        const MainInfo = require('../main.info');
+        const config = require('../main.config');
+        const sent = [];
+        Game.notify = (message, groupMinutes) => sent.push({ message, groupMinutes });
+        for (let index = 0; index < config.CPU.NOTIFY_PER_TICK; index++) MainInfo.sendEmail('earlier ' + index);
+        const room = defenseRoom();
+        const spawn = makeStructure(room, STRUCTURE_SPAWN, { id: 'spawn', pos: makePosition(room, 25, 25) });
+        const invader = hostile(room, { [ATTACK]: 6 }, makePosition(room, 26, 25));
+        setFind(room, FIND_MY_SPAWNS, [spawn]);
+        setFind(room, FIND_MY_STRUCTURES, []);
+        setFind(room, FIND_MY_CREEPS, []);
+        const manager = new DefenseManager(room);
+        manager._evaluateSafeMode(manager._assessThreat([invader]), [invader]);
+        assert.equal(room.controller.activations, 1);
+        assert.equal(sent.length, config.CPU.NOTIFY_PER_TICK, 'the game would have dropped a 21st email');
+        Game.time++;
+        MainInfo.flushNotifications();
+        const email = sent.find(entry => /SAFE MODE/.test(entry.message));
+        assert.ok(email, 'it went out on the next tick');
+        assert.equal(email.groupMinutes, 0);
+    });
+
     it('does not treat a token defender as adequate against an overwhelming breach', function () {
         const room = defenseRoom();
         const spawn = makeStructure(room, STRUCTURE_SPAWN, { id: 'spawn', pos: makePosition(room, 25, 25) });

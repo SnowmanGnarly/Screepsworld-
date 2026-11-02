@@ -1,0 +1,3703 @@
+{
+ "shard": "shard3",
+ "room": "W13S14",
+ "time": 84029934,
+ "terrain": "1111111100000111111000000000000000000001111111111111111112000000000000000000000000000000000000000011111111222000000000000000000000000000000000000000011111102200000000000022220000000000000220000000002111100000000000000000002200000220000020000000000001112000000000000000000222000000000020000000000000011100000011000000000002200000020000000000000000000111000001111100000000000000000000000001102000220001110000111111000000002200000000000000111100222000011222011111110000000000000222000000001111000000000112200111111000000000000002220000200001100000000000122200110000000000000000222220002000000000000220001222000000000000000000000000110000000000000000200011020000001110000000000000011111111000000000000000111000001111111111000000011111111111000002000000001110000111111111111000001111111100111000020000000011000011111111111111001111111110000111000200000000110001111111111111111111110011222001111200000000001000111111111111111111111000000000111110000000000010001111001102211111111100000000001111100000000201100001120000002211111110000000000111111000000222011020000000000002111111000001111111111100000022220110000000000000000111100001111111111111000000200001100000000000000001111000111111111111111000000000011100020000000000111100011111111111111111000000000111122200000000011111000111111111111111110000220011111022000011111111100020111111111000111100000001111100220001111111111000220000011100000111000000111111000111111111111100000000000000000001111011111111122011111111111110000000000000000000001101111111111020111111111111000000000000000000000000001111111110000111111111200000000000000000000000000000000211100000111111102200000011000000000000000000000002011100000111110000000001111000222000002200000000000111100000011000000000011110002222200002000000000001111000000000000000000111220000200000020000000000011110000000001100000001110000110000011122000000000111100000000111100000001110011111111111120022220001110000000001111000200001111111111111111000000202011000000000001100022000001111111111111100000000000100002000000000000022000000111111111110000000000001000000000000000000220000000001111111000000000000010000000000201100000200000000001111110000000000000100000000000111100022200112000011111120000000000001000000000011111000222011110000111111202000000000011000000000111100000000111100001111110020000000000110000000001111000000002112000001111100000000000001110000000111110000000000020000000110001110000000211111111111111110000111100000000000000111110000001111111111111111111111111100000000000001111111111111",
+ "users": {
+  "2": {
+   "username": "Invader"
+  },
+  "3": {
+   "username": "Source Keeper"
+  },
+  "69152332d470540012378bca": {
+   "username": "Fusterih"
+  }
+ },
+ "objects": [
+  {
+   "_id": "5bbcac2a9099fc012e63510d",
+   "room": "W13S14",
+   "type": "source",
+   "x": 6,
+   "y": 17,
+   "energy": 2570,
+   "energyCapacity": 3000,
+   "ticksToRegeneration": 300,
+   "nextRegenerationTime": 84030192,
+   "invaderHarvested": 22090
+  },
+  {
+   "_id": "5bbcac2a9099fc012e63510f",
+   "room": "W13S14",
+   "type": "source",
+   "x": 14,
+   "y": 37,
+   "energy": 1420,
+   "energyCapacity": 3000,
+   "ticksToRegeneration": 300,
+   "nextRegenerationTime": 84030077,
+   "invaderHarvested": 21890
+  },
+  {
+   "_id": "5bbcb26240062e4259e93981",
+   "type": "mineral",
+   "density": 2,
+   "mineralType": "H",
+   "mineralAmount": 35000,
+   "x": 18,
+   "y": 25,
+   "room": "W13S14",
+   "nextRegenerationTime": null
+  },
+  {
+   "_id": "6adf9733acecc855dab2bbbf",
+   "type": "road",
+   "x": 15,
+   "y": 37,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030774
+  },
+  {
+   "_id": "6adf990aad265ff2915e5123",
+   "type": "road",
+   "x": 15,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030744
+  },
+  {
+   "_id": "6adf9add35bfe9612189c7ba",
+   "type": "road",
+   "x": 14,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030706
+  },
+  {
+   "_id": "6adf9ca88db4604bb0b4a932",
+   "type": "road",
+   "x": 16,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030419
+  },
+  {
+   "_id": "6adf9e7b0945d24755269d4a",
+   "type": "road",
+   "x": 17,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030328
+  },
+  {
+   "_id": "6adfa04ebfbf873faac339e4",
+   "type": "road",
+   "x": 18,
+   "y": 33,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030715
+  },
+  {
+   "_id": "6adfa2350a824108594a9cca",
+   "type": "road",
+   "x": 19,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030819
+  },
+  {
+   "_id": "6adfa42849393f1c9d924958",
+   "type": "road",
+   "x": 20,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030157
+  },
+  {
+   "_id": "6adfa63c08d27c3cf4f50b19",
+   "type": "road",
+   "x": 21,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030796
+  },
+  {
+   "_id": "6adfa85b8736c5ded08ca2cd",
+   "type": "road",
+   "x": 21,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030196
+  },
+  {
+   "_id": "6adfab9828e699516467eae8",
+   "type": "road",
+   "x": 19,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030629
+  },
+  {
+   "_id": "6adfad0ea32339704065c3f1",
+   "type": "road",
+   "x": 18,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030560
+  },
+  {
+   "_id": "6adfae4b4f3b27e5dad63ca0",
+   "type": "road",
+   "x": 18,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030705
+  },
+  {
+   "_id": "6adfafa1d2a20341a3a17cd0",
+   "type": "road",
+   "x": 17,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030250
+  },
+  {
+   "_id": "6adfb0f08273c9d3a8b37ba2",
+   "type": "road",
+   "x": 17,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030809
+  },
+  {
+   "_id": "6adfb227c7b3982e10b6d515",
+   "type": "road",
+   "x": 17,
+   "y": 33,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4700,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030812
+  },
+  {
+   "_id": "6adfb3bee1cc15d93d4c9c1b",
+   "type": "road",
+   "x": 19,
+   "y": 29,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030750
+  },
+  {
+   "_id": "6adfb5598ba11e10ce30472f",
+   "type": "road",
+   "x": 18,
+   "y": 28,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030198
+  },
+  {
+   "_id": "6adfb6e284f79d0417c69838",
+   "type": "road",
+   "x": 17,
+   "y": 29,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4700,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030777
+  },
+  {
+   "_id": "6adfb84d8273c9c24eb37d2e",
+   "type": "road",
+   "x": 17,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030459
+  },
+  {
+   "_id": "6adfb9e091d2f6ad6d14cc29",
+   "type": "road",
+   "x": 20,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84029963
+  },
+  {
+   "_id": "6adfbb235c87333a64e2eee9",
+   "type": "road",
+   "x": 19,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4700,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030915
+  },
+  {
+   "_id": "6adfbc5ae407d5505555bf03",
+   "type": "road",
+   "x": 18,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030013
+  },
+  {
+   "_id": "6adfbd980d6d5603b218cbb6",
+   "type": "road",
+   "x": 17,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030614
+  },
+  {
+   "_id": "6adfbeca0339f4d7eefe3807",
+   "type": "road",
+   "x": 16,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030738
+  },
+  {
+   "_id": "6adfbffd57ff65dc7f4a3398",
+   "type": "road",
+   "x": 16,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030115
+  },
+  {
+   "_id": "6adfc137daccd9f64898f372",
+   "type": "road",
+   "x": 14,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030111
+  },
+  {
+   "_id": "6adfc2416b38aa66bb902182",
+   "type": "road",
+   "x": 15,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030380
+  },
+  {
+   "_id": "6adfc37e2bb82c3f4baf68e3",
+   "type": "road",
+   "x": 13,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030012
+  },
+  {
+   "_id": "6adfc4479566256615ea022e",
+   "type": "road",
+   "x": 12,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4700,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030793
+  },
+  {
+   "_id": "6adfc646faba0277225a8205",
+   "type": "road",
+   "x": 11,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030121
+  },
+  {
+   "_id": "6adfc8333759865092cabbd8",
+   "type": "road",
+   "x": 10,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030220
+  },
+  {
+   "_id": "6adfca05c7271067110b587a",
+   "type": "road",
+   "x": 11,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030411
+  },
+  {
+   "_id": "6adfcbc5c576934d2b7630a5",
+   "type": "road",
+   "x": 19,
+   "y": 27,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4700,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030815
+  },
+  {
+   "_id": "6adfce2cc57693d9ac76312c",
+   "type": "road",
+   "x": 20,
+   "y": 28,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030507
+  },
+  {
+   "_id": "6adfd0b80d08918f84a3a7ae",
+   "type": "road",
+   "x": 21,
+   "y": 27,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030834
+  },
+  {
+   "_id": "6adfd1b3f1dc4227d6575f6f",
+   "type": "road",
+   "x": 22,
+   "y": 28,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030009
+  },
+  {
+   "_id": "6adfd31ed2a2037b38a1848d",
+   "type": "road",
+   "x": 21,
+   "y": 29,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84029959
+  },
+  {
+   "_id": "6adfd3c35f3b2a2f423cfc75",
+   "type": "road",
+   "x": 3,
+   "y": 24,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030096
+  },
+  {
+   "_id": "6adfd541e4202ac85e311eca",
+   "type": "road",
+   "x": 3,
+   "y": 23,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84029952
+  },
+  {
+   "_id": "6adfd55628e699f70a67f413",
+   "type": "road",
+   "x": 22,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030048
+  },
+  {
+   "_id": "6adfd6aafe3d546d97c719ac",
+   "type": "road",
+   "x": 3,
+   "y": 22,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030350
+  },
+  {
+   "_id": "6adfd79a23c84e1f1e99e30a",
+   "type": "road",
+   "x": 22,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030039
+  },
+  {
+   "_id": "6adfd932203674c06d60f368",
+   "type": "road",
+   "x": 23,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030833
+  },
+  {
+   "_id": "6adfdb2334772f7a56ee623b",
+   "type": "road",
+   "x": 23,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030090
+  },
+  {
+   "_id": "6adfdc297a561225088e9019",
+   "type": "road",
+   "x": 23,
+   "y": 28,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030309
+  },
+  {
+   "_id": "6adfdeb77d8172ca0fa72cf7",
+   "type": "road",
+   "x": 24,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030576
+  },
+  {
+   "_id": "6adfdf62067f158e0b6b4933",
+   "type": "road",
+   "x": 3,
+   "y": 21,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030371
+  },
+  {
+   "_id": "6adfe0a9bfbf8729bdc348a6",
+   "type": "road",
+   "x": 3,
+   "y": 20,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030691
+  },
+  {
+   "_id": "6adfe1de5c8733d88fe2f79f",
+   "type": "road",
+   "x": 3,
+   "y": 19,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030798
+  },
+  {
+   "_id": "6adfe4c234772f983bee6466",
+   "type": "road",
+   "x": 9,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84029948
+  },
+  {
+   "_id": "6adfe5bbbfbf875d0ec349dc",
+   "type": "road",
+   "x": 3,
+   "y": 18,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030831
+  },
+  {
+   "_id": "6adfe93e37bdd2c148d8672f",
+   "type": "road",
+   "x": 4,
+   "y": 17,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030707
+  },
+  {
+   "_id": "6adfecc3ef472c1f107da857",
+   "type": "road",
+   "x": 5,
+   "y": 16,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030376
+  },
+  {
+   "_id": "6adff6809f64fd01bb5befbf",
+   "type": "road",
+   "x": 8,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4700,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030615
+  },
+  {
+   "_id": "6adffa0b37bdd27507d86aea",
+   "type": "road",
+   "x": 7,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030603
+  },
+  {
+   "_id": "6adffbbe7d81723426a733e8",
+   "type": "road",
+   "x": 6,
+   "y": 33,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4700,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030873
+  },
+  {
+   "_id": "6adfff4e6f14de7f27a5e7b2",
+   "type": "road",
+   "x": 24,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84029996
+  },
+  {
+   "_id": "6ae000833936cd021da3e29a",
+   "type": "road",
+   "x": 5,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030907
+  },
+  {
+   "_id": "6ae002b3585950c00d3d3137",
+   "type": "road",
+   "x": 4,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030733
+  },
+  {
+   "_id": "6ae004e337bdd2081dd86d39",
+   "type": "road",
+   "x": 3,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030123
+  },
+  {
+   "_id": "6ae007e6c74a6f3db79470e1",
+   "type": "road",
+   "x": 25,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030618
+  },
+  {
+   "_id": "6ae007f7dc51290fb5b1b9dc",
+   "type": "road",
+   "x": 3,
+   "y": 29,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030608
+  },
+  {
+   "_id": "6ae00e764d00d92f70140b0e",
+   "type": "road",
+   "x": 3,
+   "y": 28,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030609
+  },
+  {
+   "_id": "6ae011bd2ed0db49471e5e0c",
+   "type": "road",
+   "x": 3,
+   "y": 27,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030654
+  },
+  {
+   "_id": "6ae012b4b765adc6b66d5b75",
+   "type": "road",
+   "x": 3,
+   "y": 26,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030530
+  },
+  {
+   "_id": "6ae0170a7a448c0d1e0273a7",
+   "type": "road",
+   "x": 25,
+   "y": 33,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030077
+  },
+  {
+   "_id": "6ae035ced6b1fcaca4309735",
+   "type": "road",
+   "x": 3,
+   "y": 25,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 24100,
+   "hitsMax": 25000,
+   "nextDecayTime": 84030051
+  },
+  {
+   "_id": "6ae0392c24e48f1b576ef9eb",
+   "type": "road",
+   "x": 25,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030535
+  },
+  {
+   "_id": "6ae03b529f64fd9b1a5c0016",
+   "type": "road",
+   "x": 24,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030672
+  },
+  {
+   "_id": "6ae04d3aa32339626c65e7ee",
+   "type": "road",
+   "x": 24,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 23900,
+   "hitsMax": 25000,
+   "nextDecayTime": 84030615
+  },
+  {
+   "_id": "6ae102b1655c184c90e534c4",
+   "type": "container",
+   "x": 5,
+   "y": 16,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "store": {
+    "energy": 1910
+   },
+   "storeCapacity": 2000,
+   "hits": 237500,
+   "hitsMax": 250000,
+   "nextDecayTime": 84030261
+  },
+  {
+   "_id": "6ae12b268273c91877b3cf0a",
+   "type": "container",
+   "x": 14,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "store": {
+    "energy": 280
+   },
+   "storeCapacity": 2000,
+   "hits": 237500,
+   "hitsMax": 250000,
+   "nextDecayTime": 84030086
+  },
+  {
+   "_id": "6ae14d40ea4485cd1e2fa781",
+   "type": "container",
+   "x": 15,
+   "y": 37,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "store": {
+    "energy": 0
+   },
+   "storeCapacity": 2000,
+   "hits": 237500,
+   "hitsMax": 250000,
+   "nextDecayTime": 84030064
+  },
+  {
+   "_id": "6ae19a77ad265f9c7d5ec8d1",
+   "type": "container",
+   "x": 15,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "store": {
+    "energy": 0
+   },
+   "storeCapacity": 2000,
+   "hits": 237800,
+   "hitsMax": 250000,
+   "nextDecayTime": 84029996
+  },
+  {
+   "_id": "6ae5a8f8579c8dfe22c7e118",
+   "type": "container",
+   "x": 4,
+   "y": 16,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "store": {
+    "energy": 720
+   },
+   "storeCapacity": 2000,
+   "hits": 234100,
+   "hitsMax": 250000,
+   "nextDecayTime": 84030343
+  },
+  {
+   "_id": "6ae5aacdc06790c78a16b068",
+   "type": "road",
+   "x": 4,
+   "y": 16,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030387
+  },
+  {
+   "_id": "6ae6659f9b83db65974dd931",
+   "type": "road",
+   "x": 20,
+   "y": 26,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4700,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030857
+  },
+  {
+   "_id": "6ae67590a27a8c8dc8a219bf",
+   "type": "road",
+   "x": 20,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030373
+  },
+  {
+   "_id": "6ae692699bc6d816afdb7d9a",
+   "type": "road",
+   "x": 21,
+   "y": 25,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030054
+  },
+  {
+   "_id": "6ae6a1ba06b3470aaf55d719",
+   "type": "road",
+   "x": 23,
+   "y": 29,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030173
+  },
+  {
+   "_id": "6ae6b94874cbb205cb90f39c",
+   "type": "road",
+   "x": 26,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030065
+  },
+  {
+   "_id": "6ae6cfa09ecaa9e1cdf2ce89",
+   "type": "road",
+   "x": 26,
+   "y": 33,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030519
+  },
+  {
+   "_id": "6ae6e21b8465b933912b3547",
+   "type": "road",
+   "x": 22,
+   "y": 26,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 24000,
+   "hitsMax": 25000,
+   "nextDecayTime": 84030487
+  },
+  {
+   "_id": "6ae6e335be7b4df951a385bf",
+   "type": "road",
+   "x": 23,
+   "y": 27,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 24000,
+   "hitsMax": 25000,
+   "nextDecayTime": 84030741
+  },
+  {
+   "_id": "6ae6e3ac06b347833955e676",
+   "type": "road",
+   "x": 15,
+   "y": 33,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030001
+  },
+  {
+   "_id": "6ae6eaa504596d7184d99e37",
+   "type": "road",
+   "x": 14,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030246
+  },
+  {
+   "_id": "6ae6ee566475ebd996ef1014",
+   "type": "road",
+   "x": 16,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030929
+  },
+  {
+   "_id": "6ae6ee836df08a9e923f6778",
+   "type": "road",
+   "x": 12,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030358
+  },
+  {
+   "_id": "6ae6ee971cca24518e95ba7b",
+   "type": "road",
+   "x": 16,
+   "y": 33,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030154
+  },
+  {
+   "_id": "6ae6ef5d00d89a393ca32122",
+   "type": "road",
+   "x": 13,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030564
+  },
+  {
+   "_id": "6ae6efba6475eb81e3ef105c",
+   "type": "road",
+   "x": 15,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030084
+  },
+  {
+   "_id": "6ae6f0a10d1fe02a28b247c4",
+   "type": "road",
+   "x": 9,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030807
+  },
+  {
+   "_id": "6ae6f13a8f2c242ae6684366",
+   "type": "road",
+   "x": 8,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030059
+  },
+  {
+   "_id": "6ae6f18755e30895dcfd76e9",
+   "type": "road",
+   "x": 4,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030333
+  },
+  {
+   "_id": "6ae6f2116475ebdc66ef10fc",
+   "type": "road",
+   "x": 5,
+   "y": 33,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030168
+  },
+  {
+   "_id": "6ae6f2211744c53049278b20",
+   "type": "road",
+   "x": 7,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84029938
+  },
+  {
+   "_id": "6ae6f341469963c12bcb96b6",
+   "type": "road",
+   "x": 6,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030243
+  },
+  {
+   "_id": "6ae6f452a0346854b1bc0693",
+   "type": "road",
+   "x": 2,
+   "y": 27,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030323
+  },
+  {
+   "_id": "6ae6f52c32dca1f5000defbf",
+   "type": "road",
+   "x": 2,
+   "y": 28,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030492
+  },
+  {
+   "_id": "6ae7055b42132359cb4110d8",
+   "type": "road",
+   "x": 3,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 5000,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030129
+  },
+  {
+   "_id": "6ae707a1913ee6486bc46782",
+   "type": "road",
+   "x": 2,
+   "y": 19,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030146
+  },
+  {
+   "_id": "6ae708bbb9796258e6315028",
+   "type": "road",
+   "x": 4,
+   "y": 22,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84029958
+  },
+  {
+   "_id": "6ae70a99a27a8c568da23e85",
+   "type": "road",
+   "x": 4,
+   "y": 21,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030067
+  },
+  {
+   "_id": "6ae70acde55d2822a9411fc5",
+   "type": "road",
+   "x": 2,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 24000,
+   "hitsMax": 25000,
+   "nextDecayTime": 84030001
+  },
+  {
+   "_id": "6ae70bc44699635c32cb9d23",
+   "type": "road",
+   "x": 4,
+   "y": 20,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030261
+  },
+  {
+   "_id": "6ae70d9874cbb2141c910803",
+   "type": "road",
+   "x": 4,
+   "y": 23,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030258
+  },
+  {
+   "_id": "6ae70e948465b95ae32b406e",
+   "type": "road",
+   "x": 4,
+   "y": 24,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030841
+  },
+  {
+   "_id": "6ae71025f0f2d7b5bdd01a47",
+   "type": "road",
+   "x": 2,
+   "y": 29,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 24000,
+   "hitsMax": 25000,
+   "nextDecayTime": 84030143
+  },
+  {
+   "_id": "6ae71f7f10200c764affc76c",
+   "type": "road",
+   "x": 2,
+   "y": 18,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4900,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030141
+  },
+  {
+   "_id": "6ae721f5258cd201b0484a47",
+   "type": "road",
+   "x": 3,
+   "y": 17,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 4800,
+   "hitsMax": 5000,
+   "nextDecayTime": 84030633
+  },
+  {
+   "_id": "6ae725ae9596ede99da99652",
+   "type": "road",
+   "x": 4,
+   "y": 25,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "hits": 24000,
+   "hitsMax": 25000,
+   "nextDecayTime": 84030241
+  },
+  {
+   "_id": "5bbcac2a9099fc012e63510e",
+   "room": "W13S14",
+   "type": "controller",
+   "x": 23,
+   "y": 36,
+   "level": 4,
+   "user": "69152332d470540012378bca",
+   "progress": 347356,
+   "downgradeTime": 84069935,
+   "reservation": null,
+   "safeModeAvailable": 2,
+   "upgradeBlocked": null,
+   "safeMode": 83881242,
+   "safeModeCooldown": 83911242,
+   "hits": 0,
+   "hitsMax": 0,
+   "progressTotal": 0,
+   "isPowerEnabled": false,
+   "effects": null,
+   "sign": {
+    "user": "5e8b8a138d8d8416ad57f9f3",
+    "text": "[CAT] Security station. Report kill zones by sending 1 purifier.",
+    "time": 75305052,
+    "datetime": 1764057550551
+   }
+  },
+  {
+   "_id": "6adc2855c1952000136ffe0d",
+   "type": "spawn",
+   "room": "W13S14",
+   "x": 20,
+   "y": 29,
+   "name": "Spawn1",
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 300
+   },
+   "storeCapacityResource": {
+    "energy": 300
+   },
+   "hits": 5000,
+   "hitsMax": 5000,
+   "spawning": null,
+   "notifyWhenAttacked": true,
+   "off": false
+  },
+  {
+   "_id": "6adc5e0508d27c3c62f444f7",
+   "type": "extension",
+   "x": 19,
+   "y": 28,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6adc88c16bec47162ba3dbe0",
+   "type": "extension",
+   "x": 19,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6adcb83a91d2f68043141b1b",
+   "type": "extension",
+   "x": 21,
+   "y": 28,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6adce3aeb9541e1a823ebc03",
+   "type": "extension",
+   "x": 21,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6add0603dc51296c09b10837",
+   "type": "extension",
+   "x": 18,
+   "y": 29,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6adeeb0d84f79dfb63c66923",
+   "type": "extension",
+   "x": 18,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6adf0f1def472cfa827d7617",
+   "type": "tower",
+   "x": 16,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 950
+   },
+   "storeCapacityResource": {
+    "energy": 1000
+   },
+   "hits": 3000,
+   "hitsMax": 3000
+  },
+  {
+   "_id": "6adf26620339f4615ffe14f2",
+   "type": "extension",
+   "x": 20,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6adf62c9ea448555b82f3693",
+   "type": "extension",
+   "x": 20,
+   "y": 27,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6adf7baf96f97090d445f930",
+   "type": "extension",
+   "x": 22,
+   "y": 29,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6adf930491d2f661bf14c33e",
+   "type": "extension",
+   "x": 22,
+   "y": 27,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae5af4d5a063f3c461292a9",
+   "type": "rampart",
+   "x": 16,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10101,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029963
+  },
+  {
+   "_id": "6ae5af951cca245727956718",
+   "type": "rampart",
+   "x": 4,
+   "y": 37,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 18181,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029985
+  },
+  {
+   "_id": "6ae5b077b38d732804430aa7",
+   "type": "rampart",
+   "x": 26,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10201,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029939
+  },
+  {
+   "_id": "6ae5dad5473e6b1fcc1f1272",
+   "type": "extension",
+   "x": 21,
+   "y": 26,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae5eb917d1c4d5a5d16a1f3",
+   "type": "extension",
+   "x": 23,
+   "y": 26,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae601c7e7b16fe5707d7f31",
+   "type": "extension",
+   "x": 20,
+   "y": 25,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae6171894c7e81bcc0fd63e",
+   "type": "extension",
+   "x": 22,
+   "y": 25,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae61e98e55d28c69440e300",
+   "type": "extension",
+   "x": 15,
+   "y": 24,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae62ede81a94635d6d6b29c",
+   "type": "extension",
+   "x": 15,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae6462ff3cbae61e280c7c1",
+   "type": "extension",
+   "x": 21,
+   "y": 24,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae652457d1c4d7a3916bd50",
+   "type": "storage",
+   "x": 19,
+   "y": 26,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 10821,
+    "GO": 189,
+    "KO": 34,
+    "UH": 22,
+    "ZH": 46
+   },
+   "storeCapacity": 1000000,
+   "hits": 10000,
+   "hitsMax": 10000
+  },
+  {
+   "_id": "6ae66e25282b6b04493835d5",
+   "type": "extension",
+   "x": 25,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae6756c94c7e8b2450fee9f",
+   "type": "extension",
+   "x": 25,
+   "y": 28,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae6f52574cbb21e9a910244",
+   "type": "extension",
+   "x": 14,
+   "y": 23,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "store": {
+    "energy": 50
+   },
+   "storeCapacityResource": {
+    "energy": 50
+   },
+   "hits": 1000,
+   "hitsMax": 1000,
+   "off": false
+  },
+  {
+   "_id": "6ae7611f473e6b2a011f7725",
+   "type": "rampart",
+   "x": 15,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10101,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029965
+  },
+  {
+   "_id": "6ae761279596ed42f4a9a42c",
+   "type": "rampart",
+   "x": 16,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10601,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029967
+  },
+  {
+   "_id": "6ae7612b33d828c27f4b8795",
+   "type": "rampart",
+   "x": 17,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10601,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029968
+  },
+  {
+   "_id": "6ae7612f4213234afd412744",
+   "type": "rampart",
+   "x": 18,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10301,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029969
+  },
+  {
+   "_id": "6ae7613333d828d1254b8798",
+   "type": "rampart",
+   "x": 19,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 15901,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029970
+  },
+  {
+   "_id": "6ae76138cbf4c9748775a839",
+   "type": "rampart",
+   "x": 20,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10101,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029971
+  },
+  {
+   "_id": "6ae7614477fcc2e9e00fef77",
+   "type": "rampart",
+   "x": 21,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10601,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029974
+  },
+  {
+   "_id": "6ae7615cbe7b4d06dda3a4f4",
+   "type": "rampart",
+   "x": 15,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10521,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029985
+  },
+  {
+   "_id": "6ae7615f33d82840c84b87a1",
+   "type": "rampart",
+   "x": 17,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10421,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029985
+  },
+  {
+   "_id": "6ae761645cb43758dbc4af1d",
+   "type": "rampart",
+   "x": 16,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10161,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029985
+  },
+  {
+   "_id": "6ae7616855e308ace4fd92de",
+   "type": "rampart",
+   "x": 18,
+   "y": 37,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10681,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029985
+  },
+  {
+   "_id": "6ae7616c55e3082eb9fd92e0",
+   "type": "rampart",
+   "x": 17,
+   "y": 37,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10381,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029985
+  },
+  {
+   "_id": "6ae76170c4f9c32b1bdd358f",
+   "type": "rampart",
+   "x": 19,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10161,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029985
+  },
+  {
+   "_id": "6ae7617474cbb24d79911c42",
+   "type": "rampart",
+   "x": 18,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10581,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029986
+  },
+  {
+   "_id": "6ae7617877fcc2926c0fef84",
+   "type": "rampart",
+   "x": 20,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10561,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029987
+  },
+  {
+   "_id": "6ae7618020b9fc70156425dc",
+   "type": "rampart",
+   "x": 21,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 17921,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029989
+  },
+  {
+   "_id": "6ae7618833d8284f1b4b87aa",
+   "type": "rampart",
+   "x": 22,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 15401,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029991
+  },
+  {
+   "_id": "6ae761a59bc6d843f0dbb073",
+   "type": "rampart",
+   "x": 10,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10441,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029998
+  },
+  {
+   "_id": "6ae761ad8297c64e5d3387eb",
+   "type": "rampart",
+   "x": 9,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10041,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030000
+  },
+  {
+   "_id": "6ae761b4f2f3ae3c18453f5e",
+   "type": "rampart",
+   "x": 8,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10401,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030002
+  },
+  {
+   "_id": "6ae761bd913ee61884c47dc6",
+   "type": "rampart",
+   "x": 7,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 14381,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030004
+  },
+  {
+   "_id": "6ae761c55696659922862868",
+   "type": "rampart",
+   "x": 6,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10101,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030006
+  },
+  {
+   "_id": "6ae761cd8465b976952b553e",
+   "type": "rampart",
+   "x": 5,
+   "y": 38,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10241,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030008
+  },
+  {
+   "_id": "6ae761d98297c685523387f6",
+   "type": "rampart",
+   "x": 3,
+   "y": 36,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10261,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030011
+  },
+  {
+   "_id": "6ae7621e77fcc2d60b0fefad",
+   "type": "rampart",
+   "x": 24,
+   "y": 27,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10361,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030028
+  },
+  {
+   "_id": "6ae76222af7d1f78f127d5f2",
+   "type": "rampart",
+   "x": 24,
+   "y": 28,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10561,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030029
+  },
+  {
+   "_id": "6ae76226836b1f7b33a266a8",
+   "type": "rampart",
+   "x": 24,
+   "y": 30,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 14901,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030030
+  },
+  {
+   "_id": "6ae7622acf27c32074dccafb",
+   "type": "rampart",
+   "x": 24,
+   "y": 29,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 12281,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030031
+  },
+  {
+   "_id": "6ae7622e058a3ab23789c09e",
+   "type": "rampart",
+   "x": 24,
+   "y": 31,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10521,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030032
+  },
+  {
+   "_id": "6ae7623206b347293956059f",
+   "type": "rampart",
+   "x": 24,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10301,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84030033
+  },
+  {
+   "_id": "6ae7623ab97962ef1a3165c0",
+   "type": "rampart",
+   "x": 25,
+   "y": 33,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 12501,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029936
+  },
+  {
+   "_id": "6ae7623e16b2aff5b5fe72f4",
+   "type": "rampart",
+   "x": 25,
+   "y": 32,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 13221,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029937
+  },
+  {
+   "_id": "6ae762468f2c2475b1685f3d",
+   "type": "rampart",
+   "x": 26,
+   "y": 33,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10201,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029939
+  },
+  {
+   "_id": "6ae7624f3b6850191e5b17e1",
+   "type": "rampart",
+   "x": 27,
+   "y": 34,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 10501,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029941
+  },
+  {
+   "_id": "6ae76253a034687590bc2168",
+   "type": "rampart",
+   "x": 27,
+   "y": 35,
+   "room": "W13S14",
+   "notifyWhenAttacked": true,
+   "user": "69152332d470540012378bca",
+   "hits": 15121,
+   "hitsMax": 3000000,
+   "nextDecayTime": 84029942
+  },
+  {
+   "_id": "6ae8a641e55d281cda41868b",
+   "name": "Storekeeper Spawn1 84028549",
+   "x": 4,
+   "y": 24,
+   "body": [
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    }
+   ],
+   "store": {
+    "energy": 0
+   },
+   "storeCapacity": 650,
+   "type": "creep",
+   "room": "W13S14",
+   "user": "69152332d470540012378bca",
+   "hits": 2600,
+   "hitsMax": 2600,
+   "spawning": false,
+   "fatigue": 0,
+   "notifyWhenAttacked": true,
+   "ageTime": 84030126
+  },
+  {
+   "_id": "6ae8a787b979627f8831b496",
+   "name": "Upgrader Spawn1 84028627",
+   "x": 26,
+   "y": 33,
+   "body": [
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    }
+   ],
+   "store": {
+    "energy": 245
+   },
+   "storeCapacity": 250,
+   "type": "creep",
+   "room": "W13S14",
+   "user": "69152332d470540012378bca",
+   "hits": 2000,
+   "hitsMax": 2000,
+   "spawning": false,
+   "fatigue": 0,
+   "notifyWhenAttacked": true,
+   "ageTime": 84030186
+  },
+  {
+   "_id": "6ae8a932cf27c35b85dd1c49",
+   "name": "Upgrader Spawn1 84028729",
+   "x": 25,
+   "y": 33,
+   "body": [
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    }
+   ],
+   "store": {
+    "energy": 185
+   },
+   "storeCapacity": 250,
+   "type": "creep",
+   "room": "W13S14",
+   "user": "69152332d470540012378bca",
+   "hits": 2000,
+   "hitsMax": 2000,
+   "spawning": false,
+   "fatigue": 0,
+   "notifyWhenAttacked": true,
+   "ageTime": 84030288
+  },
+  {
+   "_id": "6ae8aa2d00d62b645ac1917f",
+   "name": "Miner Spawn1 84028789",
+   "x": 14,
+   "y": 36,
+   "body": [
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    }
+   ],
+   "store": {
+    "energy": 30
+   },
+   "storeCapacity": 50,
+   "type": "creep",
+   "room": "W13S14",
+   "user": "69152332d470540012378bca",
+   "hits": 700,
+   "hitsMax": 700,
+   "spawning": false,
+   "fatigue": 0,
+   "notifyWhenAttacked": true,
+   "ageTime": 84030309
+  },
+  {
+   "_id": "6ae8aab41d746141cd0863ab",
+   "name": "Upgrader Spawn1 84028821",
+   "x": 26,
+   "y": 34,
+   "body": [
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    }
+   ],
+   "store": {
+    "energy": 75
+   },
+   "storeCapacity": 250,
+   "type": "creep",
+   "room": "W13S14",
+   "user": "69152332d470540012378bca",
+   "hits": 2000,
+   "hitsMax": 2000,
+   "spawning": false,
+   "fatigue": 0,
+   "notifyWhenAttacked": true,
+   "ageTime": 84030380
+  },
+  {
+   "_id": "6ae8abfd33d82867284bd6c2",
+   "name": "Handyman Spawn1 84028900",
+   "x": 4,
+   "y": 25,
+   "body": [
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    }
+   ],
+   "store": {
+    "energy": 250
+   },
+   "storeCapacity": 250,
+   "type": "creep",
+   "room": "W13S14",
+   "user": "69152332d470540012378bca",
+   "hits": 2000,
+   "hitsMax": 2000,
+   "spawning": false,
+   "fatigue": 0,
+   "notifyWhenAttacked": true,
+   "ageTime": 84030459
+  },
+  {
+   "_id": "6ae8acf88465b93e182ba5ea",
+   "name": "Miner Spawn1 84028960",
+   "x": 5,
+   "y": 16,
+   "body": [
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    }
+   ],
+   "store": {
+    "energy": 30
+   },
+   "storeCapacity": 50,
+   "type": "creep",
+   "room": "W13S14",
+   "user": "69152332d470540012378bca",
+   "hits": 700,
+   "hitsMax": 700,
+   "spawning": false,
+   "fatigue": 0,
+   "notifyWhenAttacked": true,
+   "ageTime": 84030480
+  },
+  {
+   "_id": "6ae8adb65a063f27be13501c",
+   "name": "Courier Spawn1 84029005",
+   "x": 4,
+   "y": 17,
+   "body": [
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "work",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    }
+   ],
+   "store": {
+    "energy": 0
+   },
+   "storeCapacity": 250,
+   "type": "creep",
+   "room": "W13S14",
+   "user": "69152332d470540012378bca",
+   "hits": 2000,
+   "hitsMax": 2000,
+   "spawning": false,
+   "fatigue": 0,
+   "notifyWhenAttacked": true,
+   "ageTime": 84030564
+  },
+  {
+   "_id": "6ae8ba8616b2afac6bfec746",
+   "name": "Storekeeper Spawn1 84029789",
+   "x": 19,
+   "y": 27,
+   "body": [
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    },
+    {
+     "type": "move",
+     "hits": 100
+    },
+    {
+     "type": "carry",
+     "hits": 100
+    }
+   ],
+   "store": {
+    "energy": 0
+   },
+   "storeCapacity": 650,
+   "type": "creep",
+   "room": "W13S14",
+   "user": "69152332d470540012378bca",
+   "hits": 2600,
+   "hitsMax": 2600,
+   "spawning": false,
+   "fatigue": 0,
+   "notifyWhenAttacked": true,
+   "ageTime": 84031366
+  },
+  {
+   "_id": "6ae8bc754a909b7e357ff103",
+   "type": "tombstone",
+   "room": "W13S14",
+   "x": 19,
+   "y": 27,
+   "user": "69152332d470540012378bca",
+   "deathTime": 84029907,
+   "decayTime": 84030037,
+   "creepId": "6ae8a2b65cb43739e0c4fff2",
+   "creepName": "Storekeeper Spawn1 84028331",
+   "creepTicksToLive": 1,
+   "creepBody": [
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry",
+    "move",
+    "carry"
+   ],
+   "creepSaying": null,
+   "store": {}
+  }
+ ],
+ "memory": {
+  "room": {
+   "base": {
+    "name": "Spawn1",
+    "roleConfig": {
+     "partsMinMultiplier": 0,
+     "showIcons": true,
+     "useStorageAsSource": true,
+     "useSourceAsSource": true,
+     "Storekeeper": {
+      "requiredNumber": 0
+     },
+     "Harvester": {
+      "requiredNumber": 0
+     },
+     "Defender": {
+      "requiredNumber": 0
+     },
+     "Miner": {
+      "requiredNumber": 0
+     },
+     "Builder": {
+      "requiredNumber": 0
+     },
+     "Upgrader": {
+      "requiredNumber": 0
+     },
+     "Courier": {
+      "requiredNumber": 0
+     },
+     "Handyman": {
+      "requiredNumber": 0
+     },
+     "Explorer": {
+      "requiredNumber": 0
+     },
+     "MineralMiner": {
+      "requiredNumber": 0
+     },
+     "RemoteHauler": {
+      "requiredNumber": 0
+     },
+     "RemoteMiner": {
+      "requiredNumber": 0
+     },
+     "Reserver": {
+      "requiredNumber": 0
+     },
+     "Scout": {
+      "requiredNumber": 0
+     },
+     "bodyVersion": 1,
+     "quotaVersion": 1
+    }
+   },
+   "mayor": {
+    "x": 10,
+    "y": 0,
+    "mode": "auto",
+    "temp": {}
+   },
+   "roomManager": {
+    "debug": false,
+    "layout": "████████     ██████                    ██████████████████~                                        ████████~~~                                        ██████ ~~            ~~~~             ~~         ~████                   ~~     ~~     ~            ███~                  ~~~          ~              ███      ██           ~~      ~                   ███     █████                         ██ ~   ~~   ███    ██████        ~~              ████  ~~~    ██~~~ ███████             ~~~        ████         ██~~  ██████              ~~~    ~    ██           █~~~  ██                ~~~~~   ~            ~~   █~~~                        ██                ~   ██ ~      ███              ████████               ███     ██████████       ███████████     ~        ███    ████████████     ████████  ███    ~        ██    ██████████████  █████████    ███   ~        ██   █████████████████████  ██~~~  ████~          █   █████████████████████         █████           █   ████  ██ ~~█████████          █████        ~ ██    ██~      ~~███████          ██████      ~~~ ██ ~         N  ~██████     ███████████      ~~~~ ██            o o ████T S █████████████      ~    ██           V o o████ o ███████████████          ███   ~       o o████ o █████████████████         ████~~~        o███©█o o█████████████████    ~~  █████ ~~    █████████o o~o█████████   ████       █████  ~~   ██████████ o o~o o  ███     ███      ██████   █████████████ o o o o TBBBB     ████ █████████~~ █████████████ o S o o o  BB       ██ ██████████ ~ ████████████ o o o o o SBBBB          █████████    █████████o o o o o o o                    ~███     ███████o~o o o o██ o T                   ~ ███     █████  o o o o████ o ~~~     ~~           ████      ██  o o o o ████o P~~~~~    ~           ████           o o o o███o~o   ~      ~           ████         ██   U T ██Ø   T██     ███~~         ████        ████   M   ███  ████████████~  ~~~~   ███         ████  F~    ████████████████      ~ ~ ██           ██   ~~     ██████████████           █    ~             ~~      ███████████            █                  ~~         ███████             █          ~ ██     ~          ██████             █           ████   ~~~  ██~    ██████~            █          █████   ~~~ ████    ██████~ ~          ██         ████        ████    ██████  ~          ██         ████        ~██~     █████             ███       █████           ~       ██   ███       ~████████████████    ████              █████      ██████████████████████████             █████████████",
+    "planVersion": 2
+   },
+   "console": {
+    "x": 30,
+    "y": 0,
+    "height": 49,
+    "roleInfoX": 0,
+    "roleInfoY": 0,
+    "opacity": 0.8
+   },
+   "cpu": {
+    "x": 20,
+    "y": 0,
+    "opacity": 0.5
+   },
+   "roadManager": {
+    "enabled": true,
+    "watchTime": 1000,
+    "visualize": false,
+    "tick": 253,
+    "threshold": 100,
+    "tiles": {
+     "3,19": 9,
+     "25,32": 19,
+     "3,18": 7,
+     "15,35": 8,
+     "16,34": 9,
+     "26,32": 9,
+     "4,17": 3,
+     "17,33": 9,
+     "17,32": 6,
+     "27,33": 5,
+     "17,31": 22,
+     "3,20": 5,
+     "18,30": 25,
+     "3,21": 5,
+     "19,29": 26,
+     "24,31": 11,
+     "3,22": 5,
+     "20,28": 33,
+     "23,30": 11,
+     "3,23": 5,
+     "21,27": 26,
+     "22,30": 17,
+     "3,24": 5,
+     "3,25": 7,
+     "21,29": 24,
+     "3,26": 16,
+     "25,33": 5,
+     "3,27": 16,
+     "24,32": 22,
+     "3,28": 16,
+     "23,31": 15,
+     "3,29": 16,
+     "3,30": 16,
+     "16,32": 18,
+     "4,31": 16,
+     "15,33": 21,
+     "5,32": 17,
+     "6,33": 16,
+     "14,34": 19,
+     "7,34": 16,
+     "8,35": 15,
+     "26,34": 7,
+     "9,35": 16,
+     "10,35": 17,
+     "11,34": 7,
+     "12,34": 8,
+     "13,34": 8,
+     "20,26": 27,
+     "22,28": 16,
+     "16,33": 2,
+     "21,25": 5,
+     "22,26": 6,
+     "19,27": 24,
+     "23,27": 7,
+     "18,28": 29,
+     "20,30": 12,
+     "19,31": 9,
+     "18,32": 5,
+     "23,29": 9,
+     "13,35": 13,
+     "12,35": 12,
+     "26,33": 6,
+     "11,35": 12,
+     "21,31": 5,
+     "20,32": 5,
+     "19,32": 3,
+     "18,33": 3,
+     "4,25": 8,
+     "4,24": 9,
+     "4,23": 5,
+     "4,22": 5,
+     "5,21": 5,
+     "4,20": 5,
+     "22,31": 4,
+     "21,32": 2,
+     "17,34": 2,
+     "16,35": 2,
+     "14,35": 5,
+     "17,29": 8,
+     "25,31": 1,
+     "24,28": 1,
+     "24,27": 1,
+     "8,34": 1,
+     "19,33": 1,
+     "5,23": 4,
+     "6,24": 1,
+     "7,24": 1,
+     "8,24": 1,
+     "9,24": 1,
+     "10,24": 1,
+     "17,30": 3,
+     "11,24": 1,
+     "12,24": 1,
+     "13,24": 1,
+     "14,24": 1,
+     "13,23": 1,
+     "12,23": 2,
+     "11,23": 2,
+     "10,23": 2,
+     "9,23": 2,
+     "8,23": 2,
+     "7,23": 2,
+     "6,23": 2,
+     "6,22": 1,
+     "7,22": 1,
+     "8,22": 1,
+     "9,22": 1,
+     "10,22": 1,
+     "11,22": 1,
+     "12,22": 1,
+     "13,22": 1,
+     "15,34": 1
+    },
+    "currentTiles": "                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     1                                                2                                                2                                                 2                                                 2                                                 2                                                 2                                                 2                                                 2                                                 2                                                 2                                                 2                                                 2                1                                2               1                                 2              1 2                                 2            1 4 122                               2          126 21  2                               2        128221    1                               21     128221                                      12222249321                                             5311                                               12                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         ",
+    "lastTiles": {
+     "23,31": 78,
+     "10,35": 78,
+     "9,35": 79,
+     "19,27": 129,
+     "18,30": 101,
+     "24,32": 127,
+     "11,35": 45,
+     "8,34": 6,
+     "18,28": 125,
+     "19,29": 129,
+     "12,35": 45,
+     "7,34": 73,
+     "20,28": 139,
+     "13,35": 52,
+     "6,33": 71,
+     "20,30": 36,
+     "25,32": 57,
+     "5,32": 67,
+     "19,31": 48,
+     "26,32": 24,
+     "4,31": 68,
+     "18,32": 42,
+     "27,33": 22,
+     "14,35": 17,
+     "3,30": 69,
+     "17,33": 61,
+     "17,29": 28,
+     "15,34": 10,
+     "3,29": 69,
+     "16,34": 58,
+     "17,30": 25,
+     "16,33": 10,
+     "3,28": 64,
+     "17,31": 96,
+     "17,32": 33,
+     "3,27": 61,
+     "15,35": 31,
+     "16,32": 70,
+     "3,26": 61,
+     "15,33": 72,
+     "4,25": 31,
+     "14,34": 69,
+     "21,29": 99,
+     "4,24": 35,
+     "22,30": 81,
+     "21,31": 7,
+     "5,23": 12,
+     "6,24": 6,
+     "7,25": 1,
+     "8,25": 1,
+     "25,33": 19,
+     "9,25": 1,
+     "8,35": 71,
+     "10,25": 1,
+     "11,25": 1,
+     "12,25": 1,
+     "27,34": 3,
+     "13,24": 6,
+     "14,24": 5,
+     "13,23": 5,
+     "22,31": 6,
+     "12,22": 3,
+     "11,21": 2,
+     "10,21": 2,
+     "9,21": 2,
+     "8,21": 2,
+     "4,23": 23,
+     "7,21": 2,
+     "4,22": 22,
+     "6,21": 2,
+     "5,21": 23,
+     "4,20": 23,
+     "3,19": 40,
+     "3,18": 34,
+     "2,18": 1,
+     "4,17": 17,
+     "3,17": 1,
+     "3,20": 23,
+     "3,21": 23,
+     "3,22": 22,
+     "3,23": 22,
+     "3,24": 24,
+     "26,33": 20,
+     "3,25": 29,
+     "24,31": 30,
+     "23,30": 30,
+     "23,29": 32,
+     "22,28": 55,
+     "26,34": 32,
+     "11,34": 33,
+     "15,36": 3,
+     "12,34": 33,
+     "16,36": 1,
+     "13,34": 37,
+     "17,36": 3,
+     "21,27": 92,
+     "20,26": 72,
+     "26,35": 2,
+     "25,34": 6,
+     "21,25": 20,
+     "22,26": 23,
+     "23,28": 4,
+     "23,27": 18,
+     "18,36": 2,
+     "16,35": 5,
+     "24,28": 3,
+     "7,24": 5,
+     "8,24": 5,
+     "9,24": 5,
+     "10,24": 5,
+     "11,24": 5,
+     "12,24": 5,
+     "12,23": 5,
+     "11,23": 5,
+     "10,23": 5,
+     "9,23": 5,
+     "8,23": 5,
+     "7,23": 5,
+     "6,23": 5,
+     "24,29": 3,
+     "6,22": 1,
+     "7,22": 1,
+     "8,22": 1,
+     "9,22": 1,
+     "10,22": 1,
+     "11,22": 1,
+     "13,22": 1,
+     "16,31": 1,
+     "25,31": 2,
+     "7,35": 2,
+     "6,34": 2,
+     "5,33": 2,
+     "4,32": 1,
+     "3,31": 1,
+     "24,30": 1,
+     "18,33": 6,
+     "19,33": 1,
+     "20,32": 5,
+     "17,34": 5,
+     "18,35": 1,
+     "19,36": 1,
+     "21,32": 1,
+     "19,32": 3,
+     "20,24": 2
+    }
+   },
+   "defense": {
+    "threatLevel": 0,
+    "lastNotification": 84027693,
+    "alarmTicks": 0,
+    "desiredDefenders": 0,
+    "primaryTargetId": null,
+    "threatScore": 0,
+    "preferredStyle": "melee"
+   },
+   "logistics": {
+    "tasks": [
+     {
+      "id": "W13S14:6ae102b1655c184c90e534c4:6ae652457d1c4d7a3916bd50:energy",
+      "sourceId": "6ae102b1655c184c90e534c4",
+      "targetId": "6ae652457d1c4d7a3916bd50",
+      "sourceRoomName": "W13S14",
+      "targetRoomName": "W13S14",
+      "resourceType": "energy",
+      "kind": "collect",
+      "amount": 1670,
+      "remaining": 1670,
+      "priority": 75,
+      "assignedCreep": "Storekeeper Spawn1 84028549",
+      "claimedAmount": 0,
+      "created": 83991747,
+      "updated": 84029911,
+      "lastProgress": 84029911,
+      "retryAfter": 83998911,
+      "state": "open",
+      "standing": false
+     },
+     {
+      "id": "W13S14:6ae5a8f8579c8dfe22c7e118:6ae652457d1c4d7a3916bd50:energy",
+      "sourceId": "6ae5a8f8579c8dfe22c7e118",
+      "targetId": "6ae652457d1c4d7a3916bd50",
+      "sourceRoomName": "W13S14",
+      "targetRoomName": "W13S14",
+      "resourceType": "energy",
+      "kind": "collect",
+      "amount": 720,
+      "remaining": 720,
+      "priority": 75,
+      "assignedCreep": "Courier Spawn1 84029005",
+      "claimedAmount": 0,
+      "created": 84029845,
+      "updated": 84029896,
+      "lastProgress": 84029896,
+      "retryAfter": 0,
+      "state": "open",
+      "standing": false
+     }
+    ],
+    "lastRun": 0,
+    "version": 2,
+    "overflow": 0
+   },
+   "factory": {
+    "enabled": true,
+    "goals": {},
+    "batteryTarget": 0,
+    "batchSize": 1000,
+    "maxDepth": 4,
+    "maxGoals": 4,
+    "planningInterval": 10,
+    "requestExpiry": 1000,
+    "priority": 70
+   },
+   "lab": {
+    "enabled": true,
+    "goals": {},
+    "reserves": {},
+    "batchSize": 1000,
+    "maxDepth": 6,
+    "planningInterval": 10,
+    "requestExpiry": 1000,
+    "priority": 60,
+    "assignments": {
+     "inputA": null,
+     "inputB": null,
+     "outputs": []
+    },
+    "activeGoal": null,
+    "boostRequests": {},
+    "boosts": {},
+    "preloads": {},
+    "nextPlanningAt": 84029937,
+    "produceRetryAfter": 0,
+    "fsm": {
+     "phase": "idle",
+     "progress": null,
+     "progressAt": 83979382,
+     "blocked": {}
+    }
+   }
+  },
+  "creeps": {
+   "Storekeeper Spawn1 84028549": {
+    "role": "Storekeeper",
+    "home": "Spawn1",
+    "logistics": {
+     "phase": "pickup",
+     "lastCargo": 0
+    },
+    "_move": {
+     "dest": {
+      "x": 19,
+      "y": 26,
+      "room": "W13S14"
+     },
+     "time": 84029908,
+     "path": "192781",
+     "room": "W13S14"
+    },
+    "taskId": "W13S14:6ae102b1655c184c90e534c4:6ae652457d1c4d7a3916bd50:energy"
+   },
+   "Upgrader Spawn1 84028627": {
+    "role": "Upgrader",
+    "home": "Spawn1",
+    "source": "6ae652457d1c4d7a3916bd50",
+    "working": true,
+    "_move": {
+     "dest": {
+      "x": 23,
+      "y": 36,
+      "room": "W13S14"
+     },
+     "time": 84029933,
+     "path": "26334666",
+     "room": "W13S14"
+    }
+   },
+   "Upgrader Spawn1 84028729": {
+    "role": "Upgrader",
+    "home": "Spawn1",
+    "source": "6ae652457d1c4d7a3916bd50",
+    "working": true,
+    "_move": {
+     "dest": {
+      "x": 19,
+      "y": 26,
+      "room": "W13S14"
+     },
+     "time": 84029911,
+     "path": "202687",
+     "room": "W13S14"
+    }
+   },
+   "Miner Spawn1 84028789": {
+    "role": "Miner",
+    "home": "Spawn1",
+    "homeSpawn": "Spawn1",
+    "source": "5bbcac2a9099fc012e63510f",
+    "initialTicksToLive": 1499,
+    "_move": {
+     "dest": {
+      "x": 14,
+      "y": 36,
+      "room": "W13S14"
+     },
+     "time": 84028831,
+     "path": "14366",
+     "room": "W13S14"
+    },
+    "ticksToSource": 1477
+   },
+   "Upgrader Spawn1 84028821": {
+    "role": "Upgrader",
+    "home": "Spawn1",
+    "source": "6ae652457d1c4d7a3916bd50",
+    "working": true,
+    "_move": {
+     "dest": {
+      "x": 23,
+      "y": 36,
+      "room": "W13S14"
+     },
+     "time": 84029898,
+     "path": "26346766",
+     "room": "W13S14"
+    }
+   },
+   "Handyman Spawn1 84028900": {
+    "role": "Handyman",
+    "home": "Spawn1",
+    "source": "6ae652457d1c4d7a3916bd50",
+    "working": true,
+    "target": "6ae5a8f8579c8dfe22c7e118",
+    "_move": {
+     "dest": {
+      "x": 4,
+      "y": 16,
+      "room": "W13S14"
+     },
+     "time": 84029914,
+     "path": "1832666777776778888811112111288121",
+     "room": "W13S14"
+    }
+   },
+   "Miner Spawn1 84028960": {
+    "role": "Miner",
+    "home": "Spawn1",
+    "homeSpawn": "Spawn1",
+    "source": "5bbcac2a9099fc012e63510d",
+    "initialTicksToLive": 1499,
+    "_move": {
+     "dest": {
+      "x": 5,
+      "y": 16,
+      "room": "W13S14"
+     },
+     "time": 84029073,
+     "path": "05162",
+     "room": "W13S14"
+    },
+    "ticksToSource": 1406
+   },
+   "Courier Spawn1 84029005": {
+    "role": "Courier",
+    "home": "Spawn1",
+    "logistics": {
+     "phase": "pickup",
+     "lastCargo": 0
+    },
+    "taskId": "W13S14:6ae5a8f8579c8dfe22c7e118:6ae652457d1c4d7a3916bd50:energy",
+    "_move": {
+     "dest": {
+      "x": 4,
+      "y": 16,
+      "room": "W13S14"
+     },
+     "time": 84029933,
+     "path": "041721",
+     "room": "W13S14"
+    }
+   },
+   "Storekeeper Spawn1 84029789": {
+    "role": "Storekeeper",
+    "home": "Spawn1",
+    "logistics": {
+     "phase": "pickup",
+     "lastCargo": 0
+    },
+    "_move": {
+     "dest": {
+      "x": 19,
+      "y": 26,
+      "room": "W13S14"
+     },
+     "time": 84029921,
+     "path": "192721",
+     "room": "W13S14"
+    }
+   }
+  }
+ }
+}
