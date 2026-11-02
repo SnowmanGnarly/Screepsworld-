@@ -100,8 +100,7 @@ class MainInfo {
         		continue;
         	}
         	
-            var time = this._lineTimes[lineIndex];
-            room.visual.text(time.toISOString().substring(2, 16).replace('T', ' '), x, y, {align: 'left'});
+            room.visual.text(this._lineTimes[lineIndex], x, y, {align: 'left'});
             
             room.visual.text(this._lines[lineIndex], xLine, y, {align: 'left'});
             
@@ -222,7 +221,8 @@ class MainInfo {
 		console.log(displayLine);
         var height = this.getMaxHeight();
         
-        this._lineTimes.splice(0, 0, new Date());
+        // formatted once here, not on every tick the console is drawn
+        this._lineTimes.splice(0, 0, MainInfo._formatTime(new Date()));
         this._lineTimes = this._lineTimes.slice(0, height);
         
         this._lines.splice(0, 0, displayLine);
@@ -232,6 +232,10 @@ class MainInfo {
         this._lineRooms.splice(0, 0, lineRoomName);
         this._lineRooms = this._lineRooms.slice(0, height);
     }
+
+	static _formatTime(date) {
+		return date.toISOString().substring(2, 16).replace('T', ' ');
+	}
 
     /*
 	 * Logs the error to the UI console.

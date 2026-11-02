@@ -57,7 +57,6 @@ class Simulator {
         this.jobCpu = {};
         this.overLimit = 0;
         this.lowestAfterWorkerDraw = Infinity; // haulers may go below the reserve for the spawn; workers may not
-        this.lowestAfterWorkerDraw = Infinity; // haulers may go below the reserve for the spawn; workers may not
         this.metrics = {};
         METRICS.forEach(metric => { this.metrics[metric] = []; });
         this._charged = 0;
@@ -508,10 +507,6 @@ class Simulator {
         room._find[FIND_TOMBSTONES].push(tombstone);
         delete Game.creeps[creep.name];
         delete Game.objects[creep.id];
-    }
-
-    _storedEnergy(room) {
-        return [room.storage, room.terminal].reduce((sum, store) => sum + (store ? store.store.getUsedCapacity(RESOURCE_ENERGY) : 0), 0);
     }
 
     _storedEnergy(room) {

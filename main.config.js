@@ -12,7 +12,7 @@ const SETTING_DEFAULTS = {
 };
 
 module.exports = {
-	VERSION: '1.11.1', // keep in step with package.json; version() shows what the shard is running
+	VERSION: '1.11.2', // keep in step with package.json; version() shows what the shard is running
 
 	ROLE_PRIORITY: { // spawn order, the higher the sooner. Local roles all come before mission creeps
 		Harvester: 100, Defender: 90, Miner: 85, Storekeeper: 75, Builder: 70, Upgrader: 50, Courier: 40,

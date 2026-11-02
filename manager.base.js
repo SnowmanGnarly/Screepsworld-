@@ -207,7 +207,10 @@ class BaseManager {
 
     _buildSpawnQueue(baseName) {
     	var queue = [];
-    	this._allRoles.forEach(role => {
+    	// no local role can be served without a free spawn, and working out their demand is most of
+    	// what this costs. Mission providers still run: they refresh their missions as they go
+    	var roles = this._hasFreeSpawn() ? this._allRoles : [];
+    	roles.forEach(role => {
     		// one broken role must not cost the room every other creep it needs
     		try {
     			if (this._countActiveCreeps(baseName, role) >= this._getRequiredNumber(role)) return;
@@ -360,7 +363,12 @@ class BaseManager {
         return false;
     }
 
-    _fetchFreeSpawn(baseName) {  
+    _hasFreeSpawn() {
+        var baseName = this._room.memory.base.name;
+        return Boolean(this._fetchFreeSpawn(baseName) || (this._room.memory.base.outsourceSpawn && this._fetchFreeSpawn()));
+    }
+
+    _fetchFreeSpawn(baseName) {
         var freeSpawns = MainCache.getFreeSpawns(baseName);
         return freeSpawns.length > 0 ? freeSpawns[0] : null;
     }  

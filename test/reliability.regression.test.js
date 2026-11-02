@@ -79,6 +79,51 @@ describe('Cross-cutting RAS regressions', function () {
         assert.equal(MainInfo._lineRooms[0], room.name);
     });
 
+    it('draws each console line with the minute it was logged', function () {
+        const room = economyRoom();
+        MainInfo.log = MainInfo.__originalLog;
+        MainInfo.clearLines();
+        const before = new Date().toISOString().substring(2, 16).replace('T', ' ');
+        MainInfo.log('hello', room);
+        const after = new Date().toISOString().substring(2, 16).replace('T', ' ');
+        const drawn = [];
+        room.visual = { text: text => drawn.push(text) };
+        MainInfo._visualizeConsole(room);
+        assert.ok(drawn[0] === before || drawn[0] === after, 'drawn ' + drawn[0]);
+        assert.match(drawn[1], /hello/);
+    });
+
+    it('formats a console timestamp once, not on every tick it is drawn', function () {
+        const room = economyRoom();
+        room.visual = { text: () => {} };
+        MainInfo.log = MainInfo.__originalLog;
+        MainInfo.clearLines();
+        const original = Date.prototype.toISOString;
+        let formats = 0;
+        Date.prototype.toISOString = function () { formats++; return original.call(this); };
+        try {
+            MainInfo.log('hello', room);
+            MainInfo._visualizeConsole(room);
+            MainInfo._visualizeConsole(room);
+        } finally {
+            Date.prototype.toISOString = original;
+        }
+        assert.equal(formats, 1);
+    });
+
+    it('fills the role config in place, keeping quotas and adding what is missing', function () {
+        const room = economyRoom();
+        room.memory.base.roleConfig.Builder = { requiredNumber: 3 };
+        const first = MemoryManager._fetchRoomRoleConfig(room, [new Harvester(), new Builder()]);
+        assert.equal(MemoryManager._fetchRoomRoleConfig(room, [new Harvester(), new Builder()]), first, 'no new object every tick');
+        assert.equal(first.Builder.requiredNumber, 3);
+        assert.equal(first.useStorageAsSource, true);
+        assert.equal(first.partsMinMultiplier, 0);
+        room.memory.base.roleConfig = [];
+        assert.equal(Array.isArray(MemoryManager._fetchRoomRoleConfig(room, [new Harvester()])), false, 'a mistyped config becomes an object');
+        assert.deepEqual(room.memory.base.roleConfig.Harvester, { requiredNumber: 0 });
+    });
+
     it('delivers a partial load when no further source is available', function () {
         const room = economyRoom();
         const role = new RolePrototype('Test');

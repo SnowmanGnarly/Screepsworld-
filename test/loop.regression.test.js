@@ -14,6 +14,7 @@ const IntelManager = require('../manager.intel');
 const LabManager = require('../manager.lab');
 const MayorManager = require('../manager.mayor');
 const MemoryManager = require('../manager.memory');
+const TerminalManager = require('../manager.terminal');
 const main = require('../main');
 
 describe('Loop design', function () {
@@ -415,6 +416,18 @@ describe('Loop design', function () {
                 IntelManager.cleanup = original;
             }
             assert.equal(cleanups, 10);
+        });
+
+        it('leaves intel cleanup to that interval while no room has a terminal', function () {
+            const original = IntelManager.cleanup;
+            let cleanups = 0;
+            IntelManager.cleanup = () => { cleanups++; };
+            try {
+                TerminalManager.runAll();
+            } finally {
+                IntelManager.cleanup = original;
+            }
+            assert.equal(cleanups, 0);
         });
     });
 });

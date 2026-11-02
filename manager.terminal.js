@@ -6,7 +6,6 @@ var info = require('./main.info');
 class TerminalManager {
 
     static runAll() {
-        IntelManager.cleanup();
         var managers = [];
         MainUtil.findAllRooms().filter(room => this._isOwnedTerminalRoom(room))
             .sort((a, b) => a.name.localeCompare(b.name)).forEach(room => {
@@ -16,6 +15,8 @@ class TerminalManager {
                     info.failure('terminal:init:' + room.name, 'Could not initialize terminal for ' + room.name, error, room);
                 }
             });
+        // expired requests must not be planned; without a terminal MemoryManager's interval is enough
+        if (managers.length > 0) IntelManager.cleanup();
         var roomsByName = new Map(managers.map(manager => [manager._room.name, manager]));
 
         try {
@@ -178,7 +179,9 @@ class TerminalManager {
             memory.emergencyReserve = MainUtil.clamp(memory.emergencyReserve, 0, 10000000, EconomyManager.getEnergyReserve(room));
         }
         memory.batchSize = MainUtil.clamp(memory.batchSize, 1, 100000, 5000);
-        memory.cooldown = MainUtil.clamp(memory.cooldown, 0, 100, TERMINAL_COOLDOWN);
+        // at least 1: the engine sets the cooldown only when the tick ends and keeps one action per terminal,
+        // so maxTransfersPerTick and the market's maxDealsPerTick cannot raise that above one
+        memory.cooldown = MainUtil.clamp(memory.cooldown, 1, 100, TERMINAL_COOLDOWN);
         memory.hysteresis = MainUtil.clamp(memory.hysteresis, 0, memory.batchSize, Math.min(500, memory.batchSize));
         memory.maxTransfersPerTick = MainUtil.clamp(memory.maxTransfersPerTick, 1, 5, 1);
         memory.historyLimit = MainUtil.clamp(memory.historyLimit, 1, 100, 50);

@@ -52,24 +52,18 @@ class MemoryManager {
 	 */
 
 	static _fetchRoomRoleConfig(room, allRoles = []) {
-		var defaultArray = {
-			partsMinMultiplier: 0,
-			showIcons: true,
-			useStorageAsSource: true,
-			useSourceAsSource: true,
-		};
-		allRoles.forEach(role => {
-			defaultArray[role.roleName] = { requiredNumber: 0 };
+		var roleConfig = room.memory.base.roleConfig;
+		if (!roleConfig || typeof roleConfig !== 'object' || Array.isArray(roleConfig)) roleConfig = room.memory.base.roleConfig = {};
+		// filled in place: rebuilding it every tick only made garbage
+		Object.keys(MemoryManager.ROLE_CONFIG_DEFAULTS).forEach(key => {
+			if (!(key in roleConfig)) roleConfig[key] = MemoryManager.ROLE_CONFIG_DEFAULTS[key];
 		});
-
-		if (room.memory.base.roleConfig) {
-			room.memory.base.roleConfig = Object.assign(defaultArray, room.memory.base.roleConfig);
-		} else {
-			room.memory.base.roleConfig = defaultArray;
-		}
-		this._migrateBodyLimit(room.memory.base.roleConfig);
-		this._migrateDefaultQuotas(room, room.memory.base.roleConfig);
-		return room.memory.base.roleConfig;
+		allRoles.forEach(role => {
+			if (!(role.roleName in roleConfig)) roleConfig[role.roleName] = { requiredNumber: 0 };
+		});
+		this._migrateBodyLimit(roleConfig);
+		this._migrateDefaultQuotas(room, roleConfig);
+		return roleConfig;
 	}
 
 	/*
@@ -178,10 +172,10 @@ class MemoryManager {
 	 */
 
 	static getRequiredNumberForRoomAndRole(room, roleName) {
-		var hasBase = room.memory.base;
-		return hasBase
-			? (room.memory.base.roleConfig && room.memory.base.roleConfig[roleName] ? room.memory.base.roleConfig[roleName].requiredNumber : 0)
-			: -1;
+		var base = room.memory.base; // one read: the engine's room.memory is a getter
+		if (!base) return -1;
+		var quota = base.roleConfig && base.roleConfig[roleName];
+		return quota ? quota.requiredNumber : 0;
 	}
 
 
@@ -316,6 +310,12 @@ class MemoryManager {
 };
 
 MemoryManager.BODY_VERSION = 1;
+MemoryManager.ROLE_CONFIG_DEFAULTS = {
+	partsMinMultiplier: 0,
+	showIcons: true,
+	useStorageAsSource: true,
+	useSourceAsSource: true,
+};
 MemoryManager.QUOTA_VERSION = 1;
 
 module.exports = MemoryManager;

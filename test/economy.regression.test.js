@@ -59,6 +59,28 @@ describe('Terminal and market economy regressions', function () {
         Game.market.calcTransactionCost = () => 0;
     });
 
+    it('never plans a second terminal action in one tick, because the engine keeps only one', function () {
+        const free = { enabled: true, emergencyReserve: 0, batchSize: 500, cooldown: 0, hysteresis: 100, resources: {} };
+        const donor = ownedRoom('A', {
+            storage: { [RESOURCE_ENERGY]: 5000 },
+            terminal: { [RESOURCE_ENERGY]: 5000 },
+            terminalConfig: Object.assign({}, free, { maxTransfersPerTick: 2 }),
+        });
+        ownedRoom('B', { terminalConfig: Object.assign({}, free) });
+        ownedRoom('C', { terminalConfig: Object.assign({}, free) });
+        Game.time = 100;
+        const requests = [
+            TerminalManager.requestResource('B', RESOURCE_ENERGY, 500, { expiry: 100 }),
+            TerminalManager.requestResource('C', RESOURCE_ENERGY, 500, { expiry: 100 }),
+        ];
+        // the engine reads the cooldown as it stood when the tick began, and a second send replaces the first
+        let sends = 0;
+        donor.terminal.send = () => { sends++; return OK; };
+        TerminalManager.runAll();
+        assert.equal(sends, 1);
+        assert.equal(requests.filter(request => request.status === 'complete').length, 1);
+    });
+
     it('persists bounded primitive resource requests and expires them through intel cleanup', function () {
         ownedRoom('A');
         const first = TerminalManager.requestResource('A', RESOURCE_OXYGEN, 500, {

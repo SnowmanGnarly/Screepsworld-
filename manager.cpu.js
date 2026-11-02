@@ -79,7 +79,7 @@ class CpuManager {
         this._measurements.forEach(measurement => {
         	var color = measurement.usedTicks > 10 ? 'red' : 'white';
         	room.visual.text(measurement.name, x, y, {align: 'left', opacity: memory.opacity, color: color});
-        	room.visual.text(this._format.format(measurement.usedTicks), x + spaceToUsedTicks, y, {align: 'right', opacity: memory.opacity, color: color});
+        	room.visual.text(String(Number(measurement.usedTicks.toPrecision(1))), x + spaceToUsedTicks, y, {align: 'right', opacity: memory.opacity, color: color});
         	y++;
         });
     }
@@ -186,7 +186,6 @@ CpuManager.TIER_CRITICAL = 0;
 CpuManager.TIER_DEGRADED = 1;
 CpuManager.TIER_NORMAL = 2;
 CpuManager._measurements = [];
-CpuManager._format = new Intl.NumberFormat('en', { maximumSignificantDigits: 1 });
 CpuManager._resetStatsWindow();
 
 module.exports = CpuManager;

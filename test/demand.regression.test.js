@@ -5,6 +5,7 @@ const {
 const BaseManager = require('../manager.base');
 const EconomyManager = require('../manager.economy');
 const LogisticsManager = require('../manager.logistics');
+const MainCache = require('../main.cache');
 const MainHeap = require('../main.heap');
 const MainInfo = require('../main.info');
 const config = require('../main.config');
@@ -151,6 +152,46 @@ describe('Derived spawn demand', function () {
             addCreep(room, 'u', 'Upgrader');
             run(room, [new Harvester(), new Upgrader()]);
             assert.equal(spawn.spawning && spawn.spawning.memory.role, 'Upgrader');
+        });
+
+        it('works out no local demand while every spawn is busy, but still asks mission providers', function () {
+            const { room, spawn } = homeRoom({ roleConfig: { Upgrader: { requiredNumber: 1 } } });
+            const upgrader = new Upgrader();
+            let asked = 0;
+            let polled = 0;
+            const getDemand = upgrader.getDemand.bind(upgrader);
+            const isNecessary = upgrader.isNecessary.bind(upgrader);
+            upgrader.getDemand = target => { asked++; return getDemand(target); };
+            upgrader.isNecessary = target => { asked++; return isNecessary(target); };
+            BaseManager.registerMissionSpawnProvider('probe', () => { polled++; return []; });
+            try {
+                spawn.spawning = { name: 'busy', needTime: 9, remainingTime: 9 };
+                MainCache.initRound([]);
+                assert.equal(new BaseManager(room, [upgrader])._runSpawnQueue('A', false), false);
+                assert.equal(asked, 0, 'no demand is worked out for a spawn that cannot take it');
+                assert.equal(polled, 1, 'missions still refresh as they are asked');
+                spawn.spawning = null;
+                MainCache.initRound([]);
+                assert.ok(new BaseManager(room, [upgrader])._runSpawnQueue('A', false));
+                assert.ok(asked > 0);
+            } finally {
+                BaseManager.unregisterMissionSpawnProvider('probe');
+            }
+        });
+
+        it('still serves a base whose own spawn is busy from a free outsourced spawn', function () {
+            const { room, spawn } = homeRoom({ roleConfig: { Upgrader: { requiredNumber: 1 } } });
+            room.memory.base.outsourceSpawn = true;
+            spawn.spawning = { name: 'busy', needTime: 9, remainingTime: 9 };
+            const other = makeRoom('B', { memory: { base: { name: 'B', roleConfig: {} } }, energyAvailable: 300, energyCapacityAvailable: 300 });
+            other.controller = { my: true, level: 2, pos: makePosition(other, 30, 30) };
+            const helper = makeSpawn(other, { name: 'Spawn2', memory: { home: 'B' } });
+            Game.rooms.B = other;
+            Game.spawns.Spawn2 = helper;
+            setFind(other, FIND_MY_SPAWNS, [helper]);
+            MainCache.initRound([]);
+            assert.ok(new BaseManager(room, [new Upgrader()])._runSpawnQueue('A', false));
+            assert.equal(helper.spawning && helper.spawning.memory.home, 'A');
         });
 
         it('turns off derived demand for one role or the whole base', function () {
